@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tamil-voice-ai"
+version = "0.1.0"
+description = "Textless Full-Duplex Speech-to-Speech AI Model for Conversational Tamil"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [
+    {name = "Tamil Voice AI Team"}
+]
+keywords = [
+    "tamil",
+    "speech-to-speech",
+    "textless",
+    "voice-ai",
+    "dessa",
+    "moshi",
+    "audiocraft",
+    "neural-audio-codec"
+]
+dependencies = [
+    "torch>=2.0.0",
+    "torchaudio>=2.0.0",
+    "numpy>=1.24.0",
+    "soundfile>=0.12.1",
+    "scipy>=1.10.0",
+    "tqdm>=4.65.0",
+    "einops>=0.7.0",
+    "encodec>=0.1.1",
+    "huggingface_hub>=0.20.0"
+]
+
+[project.scripts]
+tamil-voice-demo = "demo:run_demo"
+tamil-voice-train = "train:train"
+
+[tool.setuptools.packages.find]
+where = ["."]
