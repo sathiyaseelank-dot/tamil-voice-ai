@@ -1,7 +1,9 @@
 # Textless Conversational Speech-to-Speech AI for Tamil (தமிழ்)
-*Inspired by Block's Dessa, Kyutai's Moshi, and Meta's AudioLM / Spirit LM*
+*Inspired by Block's Dessa, Kyutai's Moshi, and Meta's AudioCraft*
 
-An end-to-end conversational voice AI model for the **Tamil language** that operates entirely on **raw audio without intermediate text transcription**.
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/sathiyaseelank-dot/tamil-voice-ai/blob/main/Tamil_Voice_AI_Colab_Training.ipynb)
+
+An end-to-end conversational voice AI model for the **Tamil language** that operates entirely on **raw audio without intermediate text transcription**. Accelerated with **Weight-Space Programming (WSP)** and streaming datasets.
 
 ---
 
@@ -48,6 +50,23 @@ $$\text{Raw Tamil Audio In} \xrightarrow{\text{Neural Codec}} \text{RVQ Tokens} 
         │
         ▼
 [Assistant Response Audio (Tamil)]
+```
+
+---
+
+## ⚡ Google Colab & Streaming Dataset Training
+
+Train directly on Google Colab using Hugging Face audio streaming without downloading 50GB+ audio datasets to disk:
+
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/sathiyaseelank-dot/tamil-voice-ai/blob/main/Tamil_Voice_AI_Colab_Training.ipynb)
+
+```bash
+# Streaming training on Hugging Face IndicVoices-R Tamil
+python train_streaming.py \
+    --dataset SPRINGLab/IndicVoices-R_Tamil \
+    --checkpoint checkpoints/tamil_speech_lm_wsp_grafted.pt \
+    --max_steps 1000 \
+    --device cuda
 ```
 
 ---
