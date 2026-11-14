@@ -197,19 +197,15 @@ class TextlessTamilSpeechLM(nn.Module):
         self,
         user_tokens: torch.Tensor,
         max_new_tokens: int = 150,
-        temperature: float = 0.8,
-        top_k: int = 50,
+        temperature: float = 0.35,
+        top_k: int = 40,
+        top_p: float = 0.85,
+        repetition_penalty: float = 1.25,
         assistant_prefix: Optional[torch.Tensor] = None
     ) -> torch.Tensor:
         """
         Autoregressively generates assistant audio tokens conditioned on user audio tokens.
-        Args:
-            user_tokens: (1, num_codebooks, user_len)
-            max_new_tokens: number of frames to generate (e.g. 75 frames = 1 second of speech)
-            temperature: sampling temperature
-            top_k: top-k sampling cutoff
-        Returns:
-            generated_tokens: (1, num_codebooks, total_assistant_len)
+        Applies top-p nucleus sampling and repetition penalty to prevent monotone humming/drones.
         """
         self.eval()
         device = user_tokens.device
@@ -251,14 +247,37 @@ class TextlessTamilSpeechLM(nn.Module):
             # Extract next token logits for the latest time step: (1, num_codebooks, vocab_size)
             next_step_logits = logits[:, :, -1, :]
 
-            # Sample each codebook
+            # Sample each codebook with repetition penalty & top-p
             sampled_tokens = []
             for k in range(self.num_codebooks):
-                logits_k = next_step_logits[:, k, :] / max(temperature, 1e-5)
-                
+                logits_k = next_step_logits[:, k, :].clone()
+
+                # Anti-humming: apply repetition penalty on recent frames (last 15 frames)
+                if repetition_penalty > 1.0 and curr_assistant.shape[-1] > user_len:
+                    recent = curr_assistant[0, k, max(user_len, curr_assistant.shape[-1] - 15):]
+                    for prev_tok in set(recent.tolist()):
+                        if logits_k[0, prev_tok] > 0:
+                            logits_k[0, prev_tok] /= repetition_penalty
+                        else:
+                            logits_k[0, prev_tok] *= repetition_penalty
+
+                # Apply temperature
+                logits_k = logits_k / max(temperature, 1e-5)
+
+                # Top-K filtering
                 if top_k > 0:
                     val, _ = torch.topk(logits_k, min(top_k, logits_k.size(-1)))
                     logits_k[logits_k < val[:, [-1]]] = float('-inf')
+
+                # Top-P (Nucleus) filtering
+                if top_p < 1.0:
+                    sorted_logits, sorted_indices = torch.sort(logits_k, descending=True)
+                    cumulative_probs = torch.cumsum(F.softmax(sorted_logits, dim=-1), dim=-1)
+                    sorted_indices_to_remove = cumulative_probs > top_p
+                    sorted_indices_to_remove[..., 1:] = sorted_indices_to_remove[..., :-1].clone()
+                    sorted_indices_to_remove[..., 0] = 0
+                    indices_to_remove = sorted_indices_to_remove.scatter(1, sorted_indices, sorted_indices_to_remove)
+                    logits_k[indices_to_remove] = float('-inf')
 
                 probs = F.softmax(logits_k, dim=-1)
                 token = torch.multinomial(probs, num_samples=1)

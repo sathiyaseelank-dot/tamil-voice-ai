@@ -202,10 +202,17 @@ def train_streaming(
             }, latest_path)
             print(f"\n💾 Checkpoint saved: {save_path}")
 
-            # Quick audio generation preview
+            # Quick audio generation preview with anti-humming sampling
             with torch.no_grad():
                 model.eval()
-                gen_frames = model.generate(u_tok, max_new_tokens=75, temperature=0.8, top_k=50)
+                gen_frames = model.generate(
+                    u_tok,
+                    max_new_tokens=75,
+                    temperature=0.35,
+                    top_k=40,
+                    top_p=0.85,
+                    repetition_penalty=1.25
+                )
                 gen_wav = tokenizer.decode(gen_frames)
                 preview_wav_path = os.path.join(output_dir, f"sample_generation_step_{step}.wav")
                 save_audio(preview_wav_path, gen_wav, audio_cfg.sample_rate)

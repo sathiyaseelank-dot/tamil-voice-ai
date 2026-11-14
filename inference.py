@@ -46,8 +46,10 @@ class TamilVoiceAIInference:
         input_audio_path: str,
         output_audio_path: str = "response_tamil.wav",
         max_duration_sec: float = 3.0,
-        temperature: float = 0.8,
-        top_k: int = 50
+        temperature: float = 0.35,
+        top_k: int = 40,
+        top_p: float = 0.85,
+        repetition_penalty: float = 1.25
     ) -> str:
         """
         Takes input Tamil audio file, processes it end-to-end, and writes the response audio file.
@@ -70,7 +72,9 @@ class TamilVoiceAIInference:
                 user_tokens=user_tokens,
                 max_new_tokens=num_response_frames,
                 temperature=temperature,
-                top_k=top_k
+                top_k=top_k,
+                top_p=top_p,
+                repetition_penalty=repetition_penalty
             )
 
         print(f"    Generated Response Tokens Shape: {list(response_tokens.shape)}")
