@@ -72,10 +72,10 @@ def train_streaming(
     # 3. Stream Hugging Face Audio Dataset
     print(f"\n[3/4] Connecting to Hugging Face Audio Stream: '{dataset_name}'...")
     hf_dataset = load_dataset(dataset_name, split=split, streaming=True)
-    # Resample on-the-fly to 24,000 Hz
-    hf_dataset = hf_dataset.cast_column("audio", Audio(sampling_rate=audio_cfg.sample_rate))
+    # Use decode=False for maximum compatibility across environments (Colab/Local)
+    hf_dataset = hf_dataset.cast_column("audio", Audio(decode=False))
     data_iter = iter(hf_dataset)
-    print("✓ Dataset stream connected with 24,000 Hz on-the-fly resampling.")
+    print("✓ Dataset stream connected successfully.")
 
     # 4. Training Loop
     optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=0.01)
@@ -95,15 +95,36 @@ def train_streaming(
             data_iter = iter(hf_dataset)
             sample = next(data_iter)
 
-        raw_audio = sample["audio"]["array"]
-        if len(raw_audio) < audio_cfg.sample_rate * 1.0:
+        # Extract audio waveform from dict (supports both decoded array and raw bytes)
+        audio_entry = sample.get("audio", {})
+        if "array" in audio_entry and audio_entry["array"] is not None:
+            raw_audio = np.array(audio_entry["array"])
+            sr = audio_entry.get("sampling_rate", audio_cfg.sample_rate)
+        elif "bytes" in audio_entry and audio_entry["bytes"] is not None:
+            import io, soundfile as sf
+            raw_audio, sr = sf.read(io.BytesIO(audio_entry["bytes"]))
+        else:
+            continue
+
+        if len(raw_audio) < sr * 1.0:
             # Skip very short audio (< 1 sec)
             continue
 
         transcript_preview = sample.get("text", "") or sample.get("sentence", "")
 
         # Convert to torch tensor: (1, 1, samples)
-        wav = torch.from_numpy(raw_audio).float().unsqueeze(0).to(device)
+        wav = torch.from_numpy(raw_audio).float()
+        if wav.ndim == 1:
+            wav = wav.unsqueeze(0).unsqueeze(0)  # (1, 1, samples)
+        elif wav.ndim == 2:
+            wav = wav.mean(dim=-1, keepdim=True).transpose(0, 1).unsqueeze(0)
+
+        # Resample to 24,000 Hz if necessary
+        if sr != audio_cfg.sample_rate:
+            import torchaudio
+            wav = torchaudio.functional.resample(wav, sr, audio_cfg.sample_rate)
+
+        wav = wav.to(device)
         if wav.abs().max() > 0:
             wav = wav / (wav.abs().max() + 1e-6) * 0.9
 
@@ -194,6 +215,7 @@ def train_streaming(
     print("=" * 70)
     print("✅ STREAMING TRAINING COMPLETED SUCCESSFULLY!")
     print("=" * 70)
+    os._exit(0)
 
 
 if __name__ == "__main__":
