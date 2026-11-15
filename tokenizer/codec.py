@@ -76,15 +76,9 @@ class AudioCodecTokenizer:
         special_mask = cleaned_tokens >= self.config.codebook_size
         cleaned_tokens[special_mask] = 0
 
-        # If model expects more codebooks than provided, zero-pad codebook dimension
-        expected_codebooks = self.model.quantizer.n_q
-        if n_q < expected_codebooks:
-            pad_q = torch.zeros(
-                (batch_size, expected_codebooks - n_q, seq_len),
-                dtype=tokens.dtype,
-                device=self.device
-            )
-            cleaned_tokens = torch.cat([cleaned_tokens, pad_q], dim=1)
+        # Ensure codebooks do not exceed configured number of codebooks
+        if cleaned_tokens.shape[1] > self.config.num_codebooks:
+            cleaned_tokens = cleaned_tokens[:, :self.config.num_codebooks, :]
 
         # Reconstruct frame tuple expected by encodec: [(codes, scale)]
         # scale is None for 24kHz model

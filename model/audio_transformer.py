@@ -8,7 +8,7 @@ import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from typing import Optional, Dict, Tuple, List
+from typing import Optional, Dict, Tuple, List, Union
 
 from config import ModelConfig, AudioConfig
 
@@ -88,21 +88,22 @@ class DepthAudioHead(nn.Module):
     def sample_step(
         self,
         h_t: torch.Tensor,
-        temperature: float = 0.8,
-        top_k: int = 50,
-        top_p: float = 0.9,
+        temperature: Union[float, List[float]] = 0.8,
+        top_k: Union[int, List[int]] = 50,
+        top_p: Union[float, List[float]] = 0.9,
         repetition_penalty: float = 1.0,
         recent_tokens_by_cb: Optional[List[List[int]]] = None
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Sequentially predicts, samples, and conditions across codebooks for a single time step.
+        Supports both scalar sampling parameters and per-codebook hierarchical lists.
         Guarantees zero discrepancy between depth conditioning and sampled tokens.
 
         Args:
             h_t: (batch=1, d_model) hidden state at current time step
-            temperature: sampling temperature
-            top_k: top-k filtering parameter
-            top_p: nucleus filtering parameter
+            temperature: sampling temperature (scalar or list per codebook)
+            top_k: top-k filtering parameter (scalar or list per codebook)
+            top_p: nucleus filtering parameter (scalar or list per codebook)
             repetition_penalty: penalty for repeated tokens
             recent_tokens_by_cb: list of recent token ids for each codebook [cb0_list, cb1_list, ...]
         Returns:
@@ -119,6 +120,10 @@ class DepthAudioHead(nn.Module):
             logits_k = self.heads[k](h_current).squeeze(1)  # (1, vocab_size)
             logits_list.append(logits_k.unsqueeze(1))
 
+            t_k = temperature[k] if isinstance(temperature, (list, tuple)) else temperature
+            k_k = top_k[k] if isinstance(top_k, (list, tuple)) else top_k
+            p_k = top_p[k] if isinstance(top_p, (list, tuple)) else top_p
+
             # Apply repetition penalty if specified
             logits_proc = logits_k.clone()
             if repetition_penalty > 1.0 and recent_tokens_by_cb is not None:
@@ -130,27 +135,30 @@ class DepthAudioHead(nn.Module):
                         else:
                             logits_proc[0, prev_tok] *= repetition_penalty
 
-            # Apply temperature
-            logits_proc = logits_proc / max(temperature, 1e-5)
+            # Greedy or temperature sampling
+            if t_k <= 1e-4:
+                token = logits_proc.argmax(dim=-1, keepdim=True)
+            else:
+                logits_proc = logits_proc / max(t_k, 1e-5)
 
-            # Top-K filtering
-            if top_k > 0:
-                val, _ = torch.topk(logits_proc, min(top_k, logits_proc.size(-1)))
-                logits_proc[logits_proc < val[:, [-1]]] = float('-inf')
+                # Top-K filtering
+                if k_k > 0:
+                    val, _ = torch.topk(logits_proc, min(k_k, logits_proc.size(-1)))
+                    logits_proc[logits_proc < val[:, [-1]]] = float('-inf')
 
-            # Top-P (Nucleus) filtering
-            if top_p < 1.0:
-                sorted_logits, sorted_indices = torch.sort(logits_proc, descending=True)
-                cumulative_probs = torch.cumsum(F.softmax(sorted_logits, dim=-1), dim=-1)
-                sorted_indices_to_remove = cumulative_probs > top_p
-                sorted_indices_to_remove[..., 1:] = sorted_indices_to_remove[..., :-1].clone()
-                sorted_indices_to_remove[..., 0] = 0
-                indices_to_remove = sorted_indices_to_remove.scatter(1, sorted_indices, sorted_indices_to_remove)
-                logits_proc[indices_to_remove] = float('-inf')
+                # Top-P (Nucleus) filtering
+                if p_k < 1.0:
+                    sorted_logits, sorted_indices = torch.sort(logits_proc, descending=True)
+                    cumulative_probs = torch.cumsum(F.softmax(sorted_logits, dim=-1), dim=-1)
+                    sorted_indices_to_remove = cumulative_probs > p_k
+                    sorted_indices_to_remove[..., 1:] = sorted_indices_to_remove[..., :-1].clone()
+                    sorted_indices_to_remove[..., 0] = 0
+                    indices_to_remove = sorted_indices_to_remove.scatter(1, sorted_indices, sorted_indices_to_remove)
+                    logits_proc[indices_to_remove] = float('-inf')
 
-            # Sample token
-            probs = F.softmax(logits_proc, dim=-1)
-            token = torch.multinomial(probs, num_samples=1)  # (1, 1)
+                probs = F.softmax(logits_proc, dim=-1)
+                token = torch.multinomial(probs, num_samples=1)  # (1, 1)
+
             sampled_tokens.append(token)
 
             # Sequential conditioning: advance hidden state using sampled token
@@ -309,9 +317,9 @@ class TextlessTamilSpeechLM(nn.Module):
         self,
         prompt_tokens: Optional[torch.Tensor] = None,
         max_new_tokens: int = 150,
-        temperature: float = 0.8,
-        top_k: int = 50,
-        top_p: float = 0.9,
+        temperature: Union[float, List[float]] = 0.8,
+        top_k: Union[int, List[int]] = 50,
+        top_p: Union[float, List[float]] = 0.9,
         repetition_penalty: float = 1.15
     ) -> torch.Tensor:
         """
