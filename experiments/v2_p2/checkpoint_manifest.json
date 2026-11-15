@@ -1,0 +1,101 @@
+{
+  "experiment": "V2-P2",
+  "start_checkpoint": "/content/tamil-voice-ai/checkpoints_v2/tamil_speech_lm_v2_step_300.pt",
+  "start_step": 300,
+  "target_steps": 3000,
+  "seed": 2026,
+  "learning_rate": 0.0002,
+  "scheduler": "CosineAnnealingLR",
+  "checkpoints": [
+    {
+      "step": 300,
+      "path": "/content/tamil-voice-ai/checkpoints_v2/tamil_speech_lm_v2_step_300.pt",
+      "val_loss": 6.358200788497925,
+      "val_accuracy": 2.611111111111111
+    },
+    {
+      "step": 550,
+      "path": "/content/tamil-voice-ai/checkpoints_v2/tamil_speech_lm_v2_step_550.pt",
+      "drive_path": "/content/drive/MyDrive/tamil_voice_ai_checkpoints/v2/tamil_speech_lm_v2_step_550.pt",
+      "val_loss": 6.044949150085449,
+      "val_accuracy": 2.388888888888889
+    },
+    {
+      "step": 800,
+      "path": "/content/tamil-voice-ai/checkpoints_v2/tamil_speech_lm_v2_step_800.pt",
+      "drive_path": "/content/drive/MyDrive/tamil_voice_ai_checkpoints/v2/tamil_speech_lm_v2_step_800.pt",
+      "val_loss": 6.0237335681915285,
+      "val_accuracy": 3.1277777777777778
+    },
+    {
+      "step": 1050,
+      "path": "/content/tamil-voice-ai/checkpoints_v2/tamil_speech_lm_v2_step_1050.pt",
+      "drive_path": "/content/drive/MyDrive/tamil_voice_ai_checkpoints/v2/tamil_speech_lm_v2_step_1050.pt",
+      "val_loss": 6.0217180252075195,
+      "val_accuracy": 3.15
+    },
+    {
+      "step": 1300,
+      "path": "/content/tamil-voice-ai/checkpoints_v2/tamil_speech_lm_v2_step_1300.pt",
+      "drive_path": "/content/drive/MyDrive/tamil_voice_ai_checkpoints/v2/tamil_speech_lm_v2_step_1300.pt",
+      "val_loss": 5.912758541107178,
+      "val_accuracy": 3.727777777777778
+    },
+    {
+      "step": 1550,
+      "path": "/content/tamil-voice-ai/checkpoints_v2/tamil_speech_lm_v2_step_1550.pt",
+      "drive_path": "/content/drive/MyDrive/tamil_voice_ai_checkpoints/v2/tamil_speech_lm_v2_step_1550.pt",
+      "val_loss": 5.861199140548706,
+      "val_accuracy": 3.738888888888889
+    },
+    {
+      "step": 1800,
+      "path": "/content/tamil-voice-ai/checkpoints_v2/tamil_speech_lm_v2_step_1800.pt",
+      "drive_path": "/content/drive/MyDrive/tamil_voice_ai_checkpoints/v2/tamil_speech_lm_v2_step_1800.pt",
+      "val_loss": 5.8685332298278805,
+      "val_accuracy": 3.7888888888888888
+    },
+    {
+      "step": 2050,
+      "path": "/content/tamil-voice-ai/checkpoints_v2/tamil_speech_lm_v2_step_2050.pt",
+      "drive_path": "/content/drive/MyDrive/tamil_voice_ai_checkpoints/v2/tamil_speech_lm_v2_step_2050.pt",
+      "val_loss": 5.795538091659546,
+      "val_accuracy": 4.022222222222223
+    },
+    {
+      "step": 2300,
+      "path": "/content/tamil-voice-ai/checkpoints_v2/tamil_speech_lm_v2_step_2300.pt",
+      "drive_path": "/content/drive/MyDrive/tamil_voice_ai_checkpoints/v2/tamil_speech_lm_v2_step_2300.pt",
+      "val_loss": 5.775834274291992,
+      "val_accuracy": 3.894444444444444
+    },
+    {
+      "step": 2550,
+      "path": "/content/tamil-voice-ai/checkpoints_v2/tamil_speech_lm_v2_step_2550.pt",
+      "drive_path": "/content/drive/MyDrive/tamil_voice_ai_checkpoints/v2/tamil_speech_lm_v2_step_2550.pt",
+      "val_loss": 5.710088634490967,
+      "val_accuracy": 4.288888888888889
+    },
+    {
+      "step": 2800,
+      "path": "/content/tamil-voice-ai/checkpoints_v2/tamil_speech_lm_v2_step_2800.pt",
+      "drive_path": "/content/drive/MyDrive/tamil_voice_ai_checkpoints/v2/tamil_speech_lm_v2_step_2800.pt",
+      "val_loss": 5.708853816986084,
+      "val_accuracy": 4.294444444444444
+    },
+    {
+      "step": 3000,
+      "path": "/content/tamil-voice-ai/checkpoints_v2/tamil_speech_lm_v2_step_3000.pt",
+      "drive_path": "/content/drive/MyDrive/tamil_voice_ai_checkpoints/v2/tamil_speech_lm_v2_step_3000.pt",
+      "val_loss": 5.687855625152588,
+      "val_accuracy": 4.411111111111111
+    }
+  ],
+  "best_checkpoint": {
+    "step": 3000,
+    "val_loss": 5.687855625152588,
+    "val_accuracy": 4.411111111111111,
+    "path": "/content/tamil-voice-ai/checkpoints_v2/tamil_speech_lm_v2_best.pt",
+    "drive_path": "/content/drive/MyDrive/tamil_voice_ai_checkpoints/v2/tamil_speech_lm_v2_best.pt"
+  }
+}
