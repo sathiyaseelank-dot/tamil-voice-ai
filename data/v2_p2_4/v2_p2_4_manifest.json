@@ -1,0 +1,20 @@
+{
+  "experiment": "V2-P2.4",
+  "created_at": "2026-11-15 14:34:12",
+  "total_audio_hours": 20.73373992472797,
+  "train_items": 7679,
+  "val_items": 684,
+  "train_speakers_count": 382,
+  "val_speakers_count": 25,
+  "train_duration_hours": 18.968444282370275,
+  "val_duration_hours": 1.7652956423577777,
+  "mandatory_val_speakers": [
+    "S4258098500393504",
+    "S4259865400376309"
+  ],
+  "train_save_path": "/content/tamil-voice-ai/data/v2_p2_4/v2_p2_4_train_tokens.pt",
+  "val_save_path": "/content/tamil-voice-ai/data/v2_p2_4/v2_p2_4_val_tokens.pt",
+  "train_file_size_mb": 44.33382511138916,
+  "val_file_size_mb": 4.132885932922363,
+  "speaker_overlap": 0
+}
