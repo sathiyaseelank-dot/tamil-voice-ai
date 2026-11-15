@@ -1,19 +1,20 @@
 """
-Textless Full-Duplex Speech-to-Speech Transformer for Conversational Tamil.
-Operates directly on discrete multi-codebook audio tokens without intermediate text.
+Textless Autoregressive Speech Language Model (V2) for Tamil.
+Operates on discrete multi-codebook RVQ audio tokens without text conditioning.
+Implements temporal causal attention and teacher-forced / sequential depth prediction.
 """
 
 import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from typing import Optional, Dict, Tuple
+from typing import Optional, Dict, Tuple, List
 
 from config import ModelConfig, AudioConfig
 
 
 class PositionalEncoding(nn.Module):
-    def __init__(self, d_model: int, max_len: int = 2000):
+    def __init__(self, d_model: int, max_len: int = 2500):
         super().__init__()
         pe = torch.zeros(max_len, d_model)
         position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)
@@ -29,47 +30,52 @@ class PositionalEncoding(nn.Module):
 
 class DepthAudioHead(nn.Module):
     """
-    Predicts K residual codebooks hierarchically or autoregressively across depth.
-    Codebook 0 (primary acoustic/semantic token) is predicted first, and codebooks 1..K-1
-    condition on the temporal hidden state plus embeddings of preceding codebooks.
+    Predicts K residual codebooks hierarchically across depth.
+    Codebook 0 is predicted from temporal hidden state h.
+    Codebook k (k >= 1) conditions on h plus residual embeddings of codebook k-1.
+
+    During training: teacher-forced using target tokens.
+    During generation: sequentially samples codebook k-1 and conditions on it.
     """
     def __init__(self, d_model: int, num_codebooks: int, vocab_size: int):
         super().__init__()
         self.num_codebooks = num_codebooks
         self.vocab_size = vocab_size
-        
-        # Heads for each codebook
+
+        # Linear projection heads for each codebook
         self.heads = nn.ModuleList([
             nn.Linear(d_model, vocab_size) for _ in range(num_codebooks)
         ])
-        
-        # Cross-codebook residual conditioning embeddings
+
+        # Cross-codebook depth conditioning embeddings (k-1 -> k)
         self.depth_embeddings = nn.ModuleList([
             nn.Embedding(vocab_size, d_model) for _ in range(num_codebooks - 1)
         ])
 
     def forward(self, h: torch.Tensor, target_tokens: Optional[torch.Tensor] = None) -> torch.Tensor:
         """
+        Forward pass for training or greedy evaluation.
         Args:
             h: (batch, seq_len, d_model) from temporal transformer
-            target_tokens: optional (batch, num_codebooks, seq_len) during teacher forcing
+            target_tokens: optional (batch, num_codebooks, seq_len) for teacher forcing
         Returns:
             logits: (batch, num_codebooks, seq_len, vocab_size)
         """
         batch_size, seq_len, _ = h.shape
         logits_list = []
 
-        # Predict Codebook 0
+        # Codebook 0
         h_current = h
         logits_0 = self.heads[0](h_current)
         logits_list.append(logits_0.unsqueeze(1))
 
+        # Codebooks 1 .. K-1
         for k in range(1, self.num_codebooks):
             if target_tokens is not None:
                 # Teacher forcing: condition on ground truth preceding codebook token
                 prev_token = target_tokens[:, k - 1, :]
             else:
-                # Inference: condition on argmax/sampled token of preceding codebook
+                # Greedy fallback
                 prev_token = logits_list[-1].squeeze(1).argmax(dim=-1)
 
             depth_emb = self.depth_embeddings[k - 1](prev_token)
@@ -77,41 +83,109 @@ class DepthAudioHead(nn.Module):
             logits_k = self.heads[k](h_current)
             logits_list.append(logits_k.unsqueeze(1))
 
-        # Shape: (batch, num_codebooks, seq_len, vocab_size)
-        return torch.cat(logits_list, dim=1)
+        return torch.cat(logits_list, dim=1)  # (batch, num_codebooks, seq_len, vocab_size)
+
+    def sample_step(
+        self,
+        h_t: torch.Tensor,
+        temperature: float = 0.8,
+        top_k: int = 50,
+        top_p: float = 0.9,
+        repetition_penalty: float = 1.0,
+        recent_tokens_by_cb: Optional[List[List[int]]] = None
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        """
+        Sequentially predicts, samples, and conditions across codebooks for a single time step.
+        Guarantees zero discrepancy between depth conditioning and sampled tokens.
+
+        Args:
+            h_t: (batch=1, d_model) hidden state at current time step
+            temperature: sampling temperature
+            top_k: top-k filtering parameter
+            top_p: nucleus filtering parameter
+            repetition_penalty: penalty for repeated tokens
+            recent_tokens_by_cb: list of recent token ids for each codebook [cb0_list, cb1_list, ...]
+        Returns:
+            sampled_frame: (1, num_codebooks, 1) tensor of sampled token IDs
+            step_logits: (1, num_codebooks, vocab_size) logits for each codebook
+        """
+        device = h_t.device
+        h_current = h_t.unsqueeze(1)  # (1, 1, d_model)
+        sampled_tokens = []
+        logits_list = []
+
+        for k in range(self.num_codebooks):
+            # Compute logits for codebook k
+            logits_k = self.heads[k](h_current).squeeze(1)  # (1, vocab_size)
+            logits_list.append(logits_k.unsqueeze(1))
+
+            # Apply repetition penalty if specified
+            logits_proc = logits_k.clone()
+            if repetition_penalty > 1.0 and recent_tokens_by_cb is not None:
+                recent = recent_tokens_by_cb[k]
+                for prev_tok in set(recent):
+                    if prev_tok < self.vocab_size:
+                        if logits_proc[0, prev_tok] > 0:
+                            logits_proc[0, prev_tok] /= repetition_penalty
+                        else:
+                            logits_proc[0, prev_tok] *= repetition_penalty
+
+            # Apply temperature
+            logits_proc = logits_proc / max(temperature, 1e-5)
+
+            # Top-K filtering
+            if top_k > 0:
+                val, _ = torch.topk(logits_proc, min(top_k, logits_proc.size(-1)))
+                logits_proc[logits_proc < val[:, [-1]]] = float('-inf')
+
+            # Top-P (Nucleus) filtering
+            if top_p < 1.0:
+                sorted_logits, sorted_indices = torch.sort(logits_proc, descending=True)
+                cumulative_probs = torch.cumsum(F.softmax(sorted_logits, dim=-1), dim=-1)
+                sorted_indices_to_remove = cumulative_probs > top_p
+                sorted_indices_to_remove[..., 1:] = sorted_indices_to_remove[..., :-1].clone()
+                sorted_indices_to_remove[..., 0] = 0
+                indices_to_remove = sorted_indices_to_remove.scatter(1, sorted_indices, sorted_indices_to_remove)
+                logits_proc[indices_to_remove] = float('-inf')
+
+            # Sample token
+            probs = F.softmax(logits_proc, dim=-1)
+            token = torch.multinomial(probs, num_samples=1)  # (1, 1)
+            sampled_tokens.append(token)
+
+            # Sequential conditioning: advance hidden state using sampled token
+            if k < self.num_codebooks - 1:
+                depth_emb = self.depth_embeddings[k](token)  # (1, 1, d_model)
+                h_current = h_current + depth_emb
+
+        sampled_frame = torch.cat(sampled_tokens, dim=1).unsqueeze(-1)  # (1, num_codebooks, 1)
+        step_logits = torch.cat(logits_list, dim=1)  # (1, num_codebooks, vocab_size)
+        return sampled_frame, step_logits
 
 
 class TextlessTamilSpeechLM(nn.Module):
     """
-    Dual-stream Audio-to-Audio Language Model for Tamil.
-    Processes:
-      1. User audio stream tokens (listening)
-      2. Assistant audio stream tokens (speaking)
-    Enables full-duplex conversational interaction without text.
+    Single-stream Textless Autoregressive Audio Transformer.
+    Models temporal dependencies via causal attention and codebook depth dependencies
+    via sequential teacher-forcing (training) and sequential sampling (inference).
     """
     def __init__(self, config: Optional[ModelConfig] = None):
         super().__init__()
         self.config = config or ModelConfig()
         audio_cfg = self.config.audio
-        
+
         self.num_codebooks = audio_cfg.num_codebooks
         self.vocab_size = audio_cfg.vocab_size
+        self.pad_token_id = audio_cfg.pad_token_id
+        self.bos_token_id = audio_cfg.bos_token_id
         d_model = self.config.d_model
 
-        # Token embeddings for user and assistant streams (separate tables per codebook)
-        self.user_embeddings = nn.ModuleList([
-            nn.Embedding(self.vocab_size, d_model) for _ in range(self.num_codebooks)
-        ])
-        self.assistant_embeddings = nn.ModuleList([
+        # Token embeddings per codebook (summed along codebook dimension)
+        self.codebook_embeddings = nn.ModuleList([
             nn.Embedding(self.vocab_size, d_model) for _ in range(self.num_codebooks)
         ])
 
-        # Channel role embeddings (0 = user channel, 1 = assistant channel)
-        self.channel_emb = nn.Embedding(2, d_model)
-        
-        # Projection layer to merge user & assistant streams into single sequence representation
-        self.fusion_proj = nn.Linear(d_model * 2, d_model)
-        self.pos_encoder = PositionalEncoding(d_model, max_len=self.config.max_seq_len)
+        self.pos_encoder = PositionalEncoding(d_model, max_len=self.config.max_seq_len + 500)
 
         # Causal Temporal Transformer Decoder
         decoder_layer = nn.TransformerEncoderLayer(
@@ -126,166 +200,190 @@ class TextlessTamilSpeechLM(nn.Module):
         self.transformer = nn.TransformerEncoder(decoder_layer, num_layers=self.config.n_layers)
         self.ln_f = nn.LayerNorm(d_model)
 
-        # Output prediction head for multi-codebook audio tokens
+        # Multi-codebook depth head
         self.head = DepthAudioHead(d_model, self.num_codebooks, self.vocab_size)
 
-    def _embed_stream(self, tokens: torch.Tensor, embedding_list: nn.ModuleList) -> torch.Tensor:
+    def _embed_frames(self, tokens: torch.Tensor) -> torch.Tensor:
         """
-        Embeds multi-codebook tokens of shape (batch, num_codebooks, seq_len)
-        by summing embeddings across codebooks.
+        Embeds multi-codebook frames by summing embeddings across codebooks.
+        Args:
+            tokens: (batch, num_codebooks, seq_len)
+        Returns:
+            embedded: (batch, seq_len, d_model)
         """
         batch_size, n_q, seq_len = tokens.shape
         embedded = 0
         for k in range(n_q):
-            embedded = embedded + embedding_list[k](tokens[:, k, :])
-        return embedded  # (batch, seq_len, d_model)
+            embedded = embedded + self.codebook_embeddings[k](tokens[:, k, :])
+        return embedded
 
     def _generate_causal_mask(self, sz: int, device: torch.device) -> torch.Tensor:
-        """Standard upper triangular causal mask."""
-        mask = torch.triu(torch.full((sz, sz), float('-inf'), device=device), diagonal=1)
-        return mask
+        """Strict upper triangular causal mask."""
+        return torch.triu(torch.full((sz, sz), float('-inf'), device=device), diagonal=1)
 
     def forward(
         self,
-        user_tokens: torch.Tensor,
-        assistant_tokens: torch.Tensor,
-        target_assistant_tokens: Optional[torch.Tensor] = None
-    ) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
+        input_tokens: torch.Tensor,
+        target_tokens: Optional[torch.Tensor] = None
+    ) -> Tuple[torch.Tensor, Optional[torch.Tensor], Optional[Dict[str, float]]]:
         """
+        Forward pass.
         Args:
-            user_tokens: (batch, num_codebooks, seq_len)
-            assistant_tokens: (batch, num_codebooks, seq_len) (input context for assistant)
-            target_assistant_tokens: (batch, num_codebooks, seq_len) (targets for loss computation)
+            input_tokens: (batch, num_codebooks, seq_len)
+            target_tokens: optional (batch, num_codebooks, seq_len)
         Returns:
             logits: (batch, num_codebooks, seq_len, vocab_size)
-            loss: scalar loss (if targets provided)
+            loss: scalar cross-entropy loss (or None if no targets)
+            metrics: dict of per-codebook loss, accuracies, entropy (or None)
         """
-        seq_len = user_tokens.shape[-1]
-        device = user_tokens.device
+        seq_len = input_tokens.shape[-1]
+        device = input_tokens.device
 
-        # Embed user and assistant streams
-        u_emb = self._embed_stream(user_tokens, self.user_embeddings) + self.channel_emb(torch.tensor(0, device=device))
-        a_emb = self._embed_stream(assistant_tokens, self.assistant_embeddings) + self.channel_emb(torch.tensor(1, device=device))
+        # Embed input frames
+        x = self._embed_frames(input_tokens)
+        x = self.pos_encoder(x)
 
-        # Concatenate and fuse channels
-        fused = self.fusion_proj(torch.cat([u_emb, a_emb], dim=-1))
-        x = self.pos_encoder(fused)
-
-        # Causal attention mask
+        # Temporal causal attention
         mask = self._generate_causal_mask(seq_len, device)
         h = self.transformer(x, mask=mask, is_causal=True)
         h = self.ln_f(h)
 
-        # Predict assistant audio token logits
-        logits = self.head(h, target_tokens=target_assistant_tokens)
+        # Depth prediction
+        logits = self.head(h, target_tokens=target_tokens)
 
         loss = None
-        if target_assistant_tokens is not None:
-            # Flatten codebooks and time steps for cross-entropy loss
-            # logits: (batch, num_codebooks, seq_len, vocab_size)
-            # targets: (batch, num_codebooks, seq_len)
+        metrics = None
+
+        if target_tokens is not None:
+            # Flatten codebooks and sequence length for loss
+            flat_logits = logits.permute(0, 2, 1, 3).reshape(-1, self.vocab_size)
+            flat_targets = target_tokens.permute(0, 2, 1).reshape(-1)
+
             loss = F.cross_entropy(
-                logits.reshape(-1, self.vocab_size),
-                target_assistant_tokens.reshape(-1),
-                ignore_index=self.config.audio.pad_token_id
+                flat_logits,
+                flat_targets,
+                ignore_index=self.pad_token_id
             )
 
-        return logits, loss
+            # Detailed metrics calculation
+            with torch.no_grad():
+                metrics = {}
+                # Valid mask (ignore actual padding only, keep legitimate speech and silence)
+                valid_mask = (target_tokens != self.pad_token_id)  # (batch, num_codebooks, seq_len)
+                total_valid = valid_mask.sum().item()
+
+                if total_valid > 0:
+                    pred_tokens = logits.argmax(dim=-1)  # (batch, num_codebooks, seq_len)
+                    correct_all = (pred_tokens == target_tokens) & valid_mask
+                    metrics["speech_accuracy"] = correct_all.sum().item() / total_valid
+
+                    for k in range(self.num_codebooks):
+                        valid_k = valid_mask[:, k, :]
+                        total_valid_k = valid_k.sum().item()
+                        if total_valid_k > 0:
+                            # Per-codebook loss
+                            cb_logits = logits[:, k, :, :].reshape(-1, self.vocab_size)
+                            cb_targets = target_tokens[:, k, :].reshape(-1)
+                            cb_loss = F.cross_entropy(cb_logits, cb_targets, ignore_index=self.pad_token_id)
+                            metrics[f"loss_cb{k}"] = cb_loss.item()
+
+                            # Per-codebook accuracy
+                            cb_correct = ((pred_tokens[:, k, :] == target_tokens[:, k, :]) & valid_k).sum().item()
+                            metrics[f"acc_cb{k}"] = cb_correct / total_valid_k
+                        else:
+                            metrics[f"loss_cb{k}"] = 0.0
+                            metrics[f"acc_cb{k}"] = 0.0
+
+                    # Prediction entropy across vocabulary
+                    probs = F.softmax(flat_logits[flat_targets != self.pad_token_id], dim=-1)
+                    entropy = -(probs * torch.log(probs.clamp_min(1e-9))).sum(dim=-1).mean()
+                    metrics["entropy"] = entropy.item()
+                else:
+                    metrics["speech_accuracy"] = 0.0
+                    metrics["entropy"] = 0.0
+
+        return logits, loss, metrics
 
     @torch.no_grad()
     def generate(
         self,
-        user_tokens: torch.Tensor,
+        prompt_tokens: Optional[torch.Tensor] = None,
         max_new_tokens: int = 150,
-        temperature: float = 0.35,
-        top_k: int = 40,
-        top_p: float = 0.85,
-        repetition_penalty: float = 1.25,
-        assistant_prefix: Optional[torch.Tensor] = None
+        temperature: float = 0.8,
+        top_k: int = 50,
+        top_p: float = 0.9,
+        repetition_penalty: float = 1.15
     ) -> torch.Tensor:
         """
-        Autoregressively generates assistant audio tokens conditioned on user audio tokens.
-        Applies top-p nucleus sampling and repetition penalty to prevent monotone humming/drones.
+        Autoregressively generates next audio frames using sequential depth sampling.
+        Matches training token conventions exactly.
+
+        Args:
+            prompt_tokens: optional (1, num_codebooks, prompt_len)
+            max_new_tokens: number of new frames to generate (75 frames = 1.0 second)
+            temperature: sampling temperature
+            top_k: top-k filtering parameter
+            top_p: nucleus filtering parameter
+            repetition_penalty: penalty for recently repeated tokens
+        Returns:
+            generated_tokens: (1, num_codebooks, max_new_tokens)
         """
         self.eval()
-        device = user_tokens.device
-        cfg = self.config.audio
+        device = next(self.parameters()).device
 
-        user_len = user_tokens.shape[-1]
-        
-        # Start assistant tokens with silence during user speech
-        if assistant_prefix is None:
-            curr_assistant = torch.full(
-                (1, self.num_codebooks, user_len),
-                cfg.silence_token_id,
-                dtype=torch.long,
-                device=device
-            )
-        else:
-            curr_assistant = assistant_prefix.to(device)
-
-        # Extended user stream with silence padding for future frames
-        future_user = torch.full(
-            (1, self.num_codebooks, max_new_tokens),
-            cfg.silence_token_id,
+        bos = torch.full(
+            (1, self.num_codebooks, 1),
+            self.bos_token_id,
             dtype=torch.long,
             device=device
         )
-        full_user = torch.cat([user_tokens, future_user], dim=-1)
+
+        if prompt_tokens is None:
+            # Unconditional generation: starts with BOS
+            curr_tokens = bos
+            prompt_len = 0
+        else:
+            # Conditional generation: prepend BOS to prompt
+            prompt_tokens = prompt_tokens.to(device)
+            curr_tokens = torch.cat([bos, prompt_tokens], dim=-1)
+            prompt_len = prompt_tokens.shape[-1]
+
+        # Recent tokens history per codebook for repetition penalty
+        recent_window = 25
 
         for step in range(max_new_tokens):
-            curr_len = curr_assistant.shape[-1]
-            if curr_len >= self.config.max_seq_len:
+            seq_len = curr_tokens.shape[-1]
+            if seq_len >= self.config.max_seq_len:
                 break
 
-            # Current user slice matching assistant length
-            u_slice = full_user[:, :, :curr_len]
+            # Forward pass through temporal transformer
+            x = self._embed_frames(curr_tokens)
+            x = self.pos_encoder(x)
+            mask = self._generate_causal_mask(seq_len, device)
+            h = self.transformer(x, mask=mask, is_causal=True)
+            h = self.ln_f(h)
 
-            # Forward pass
-            logits, _ = self.forward(u_slice, curr_assistant)
-            
-            # Extract next token logits for the latest time step: (1, num_codebooks, vocab_size)
-            next_step_logits = logits[:, :, -1, :]
+            # Latest temporal hidden state
+            h_latest = h[:, -1, :].squeeze(1)  # (1, d_model)
 
-            # Sample each codebook with repetition penalty & top-p
-            sampled_tokens = []
+            # Gather recent tokens per codebook
+            recent_tokens_by_cb = []
             for k in range(self.num_codebooks):
-                logits_k = next_step_logits[:, k, :].clone()
+                history = curr_tokens[0, k, -recent_window:].tolist()
+                recent_tokens_by_cb.append(history)
 
-                # Anti-humming: apply repetition penalty on recent frames (last 15 frames)
-                if repetition_penalty > 1.0 and curr_assistant.shape[-1] > user_len:
-                    recent = curr_assistant[0, k, max(user_len, curr_assistant.shape[-1] - 15):]
-                    for prev_tok in set(recent.tolist()):
-                        if logits_k[0, prev_tok] > 0:
-                            logits_k[0, prev_tok] /= repetition_penalty
-                        else:
-                            logits_k[0, prev_tok] *= repetition_penalty
+            # Sequentially predict, sample, and depth-condition the 4 codebooks
+            next_frame, _ = self.head.sample_step(
+                h_t=h_latest,
+                temperature=temperature,
+                top_k=top_k,
+                top_p=top_p,
+                repetition_penalty=repetition_penalty,
+                recent_tokens_by_cb=recent_tokens_by_cb
+            )  # (1, num_codebooks, 1)
 
-                # Apply temperature
-                logits_k = logits_k / max(temperature, 1e-5)
+            # Append completed frame to sequence
+            curr_tokens = torch.cat([curr_tokens, next_frame], dim=-1)
 
-                # Top-K filtering
-                if top_k > 0:
-                    val, _ = torch.topk(logits_k, min(top_k, logits_k.size(-1)))
-                    logits_k[logits_k < val[:, [-1]]] = float('-inf')
-
-                # Top-P (Nucleus) filtering
-                if top_p < 1.0:
-                    sorted_logits, sorted_indices = torch.sort(logits_k, descending=True)
-                    cumulative_probs = torch.cumsum(F.softmax(sorted_logits, dim=-1), dim=-1)
-                    sorted_indices_to_remove = cumulative_probs > top_p
-                    sorted_indices_to_remove[..., 1:] = sorted_indices_to_remove[..., :-1].clone()
-                    sorted_indices_to_remove[..., 0] = 0
-                    indices_to_remove = sorted_indices_to_remove.scatter(1, sorted_indices, sorted_indices_to_remove)
-                    logits_k[indices_to_remove] = float('-inf')
-
-                probs = F.softmax(logits_k, dim=-1)
-                token = torch.multinomial(probs, num_samples=1)
-                sampled_tokens.append(token)
-
-            # Combine codebooks: (1, num_codebooks, 1)
-            new_frame = torch.stack(sampled_tokens, dim=1)
-            curr_assistant = torch.cat([curr_assistant, new_frame], dim=-1)
-
-        # Return only the newly generated response frames
-        return curr_assistant[:, :, user_len:]
+        # Return only newly generated frames (excluding BOS and prompt)
+        return curr_tokens[:, :, (1 + prompt_len):]

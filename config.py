@@ -28,10 +28,10 @@ class AudioConfig:
 
 @dataclass
 class ModelConfig:
-    d_model: int = 384
-    n_heads: int = 6
+    d_model: int = 1024
+    n_heads: int = 16
     n_layers: int = 6
-    d_ff: int = 1536
+    d_ff: int = 4096
     dropout: float = 0.1
     max_seq_len: int = 750  # 10 seconds of conversational audio (75 frames/sec * 10)
     audio: AudioConfig = field(default_factory=AudioConfig)
