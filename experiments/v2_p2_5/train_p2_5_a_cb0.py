@@ -121,7 +121,13 @@ def load_validation_corpus(val_tokens_path: str, tokenizer: AudioCodecTokenizer,
 
 
 def evaluate_held_out(model: nn.Module, full_val_samples: list, diag_samples: list, tokenizer: AudioCodecTokenizer, device: torch.device, out_dir: str, step: int):
-    """Evaluates CB0 loss, accuracy, perplexity across full validation set and synthesizes 1-codebook audio."""
+    """
+    Evaluates CB0 loss, accuracy, perplexity across full validation set and produces:
+    1. Autoregressive continuation
+    2. Unconditional generation
+    3. Teacher-forced reconstruction
+    4. Quantitative token and audio diagnostics (RMS, silence %, repetition rate, unique tokens)
+    """
     model.eval()
     losses = []
     accuracies = []
@@ -129,7 +135,7 @@ def evaluate_held_out(model: nn.Module, full_val_samples: list, diag_samples: li
 
     with torch.no_grad():
         for s in full_val_samples:
-            toks = s['tokens']  # (1, T)
+            toks = s['tokens'].to(device)  # (1, T)
             bos = torch.tensor([[1025]], dtype=torch.long, device=device)
             toks_bos = torch.cat([bos, toks], dim=-1)
             x_in = toks_bos[:, :-1]
@@ -146,25 +152,62 @@ def evaluate_held_out(model: nn.Module, full_val_samples: list, diag_samples: li
     mean_ent = float(np.mean(entropies)) if entropies else 0.0
     mean_ppl = float(math.exp(min(mean_loss, 20.0)))
 
-    # Synthesize sample 03 continuation from diagnostic set
+    # Select reference sample 03 for standardized generation
     synth_samples = diag_samples if diag_samples else full_val_samples
     s3 = synth_samples[2] if len(synth_samples) > 2 else synth_samples[0]
-    prompt_75 = s3['tokens'][:, :75]
+    prompt_75 = s3['tokens'][:, :75].to(device)
+
     with torch.no_grad():
+        # 1. Autoregressive Continuation (prompt=75, gen=150)
         gen_tokens = model.generate(prompt_tokens=prompt_75, max_new_tokens=150, temperature=0.8, top_k=50, top_p=0.9)
         emb = tokenizer.model.quantizer.decode(gen_tokens)
         synth_wav = tokenizer.model.decoder(emb).squeeze().cpu().numpy()
 
-    wav_out = os.path.join(out_dir, f"sample03_p2_5_a_step_{step}.wav")
+        # 2. Unconditional Generation (from pure BOS)
+        uncond_tokens = model.generate(prompt_tokens=None, max_new_tokens=150, temperature=0.8, top_k=50, top_p=0.9)
+        emb_uncond = tokenizer.model.quantizer.decode(uncond_tokens)
+        uncond_wav = tokenizer.model.decoder(emb_uncond).squeeze().cpu().numpy()
+
+        # 3. Teacher-Forced Argmax Reconstruction
+        tf_bos = torch.cat([torch.tensor([[1025]], dtype=torch.long, device=device), prompt_75], dim=-1)
+        tf_logits, _, _ = model(tf_bos[:, :-1])
+        tf_tokens = tf_logits.argmax(dim=-1).unsqueeze(1)
+        emb_tf = tokenizer.model.quantizer.decode(tf_tokens)
+        tf_wav = tokenizer.model.decoder(emb_tf).squeeze().cpu().numpy()
+
+    # Audio metrics
+    rms = float(np.sqrt(np.mean(synth_wav ** 2))) if len(synth_wav) > 0 else 0.0
+    silence_pct = float(np.mean(np.abs(synth_wav) < 0.01)) * 100.0 if len(synth_wav) > 0 else 100.0
+
+    # Token diagnostics
+    gen_arr = gen_tokens.squeeze().cpu().numpy()
+    uniq_tokens = int(len(np.unique(gen_arr)))
+    consec_reps = int(np.sum(gen_arr[1:] == gen_arr[:-1])) if len(gen_arr) > 1 else 0
+    repetition_rate = float(consec_reps / max(1, len(gen_arr) - 1)) * 100.0
+
+    # Save audio files
+    wav_out = os.path.join(out_dir, f"sample03_p2_5_a2_step_{step}.wav")
+    wav_uncond_out = os.path.join(out_dir, f"sample_uncond_p2_5_a2_step_{step}.wav")
+    wav_tf_out = os.path.join(out_dir, f"sample03_tf_p2_5_a2_step_{step}.wav")
+
     sf.write(wav_out, synth_wav, 24000)
+    sf.write(wav_uncond_out, uncond_wav, 24000)
+    sf.write(wav_tf_out, tf_wav, 24000)
 
     return {
+        "step": step,
         "val_loss": mean_loss,
         "val_accuracy_pct": mean_acc * 100.0,
         "val_perplexity": mean_ppl,
         "val_entropy": mean_ent,
         "val_sequences_evaluated": len(full_val_samples),
-        "synth_wav": wav_out
+        "ar_rms": rms,
+        "ar_silence_pct": silence_pct,
+        "ar_unique_tokens": uniq_tokens,
+        "ar_repetition_rate_pct": repetition_rate,
+        "synth_wav": wav_out,
+        "uncond_wav": wav_uncond_out,
+        "tf_wav": wav_tf_out
     }
 
 
@@ -237,6 +280,12 @@ def main():
     print("\nEvaluating initial zero-step validation metrics...")
     init_metrics = evaluate_held_out(model, full_val_samples, diag_samples, tokenizer, device, args.output_dir, step=0)
     print(f"  [Step 0 Baseline] Val Loss: {init_metrics['val_loss']:.4f} | CB0 Acc: {init_metrics['val_accuracy_pct']:.2f}% | PPL: {init_metrics['val_perplexity']:.1f} (Evaluated on {init_metrics['val_sequences_evaluated']} sequences)")
+    print(f"  [Step 0 Baseline Audio] RMS: {init_metrics['ar_rms']:.4f} | Silence: {init_metrics['ar_silence_pct']:.1f}% | Repetition: {init_metrics['ar_repetition_rate_pct']:.1f}% | Unique: {init_metrics['ar_unique_tokens']}/150")
+
+    history = [init_metrics]
+    history_json_path = os.path.join(args.output_dir, "evaluation_history.json")
+    with open(history_json_path, 'w') as f:
+        json.dump(history, f, indent=2)
 
     # 4. Data Pipeline Setup (Streaming IndicVoices-R_Tamil)
     print("\nConnecting to streaming Tamil training corpus...")
@@ -337,7 +386,12 @@ def main():
                 print(f"\n--- [Validation at Step {step}] ---")
                 val_res = evaluate_held_out(model, full_val_samples, diag_samples, tokenizer, device, args.output_dir, step)
                 print(f"  Val Loss: {val_res['val_loss']:.4f} | CB0 Acc: {val_res['val_accuracy_pct']:.2f}% | PPL: {val_res['val_perplexity']:.1f} ({val_res['val_sequences_evaluated']} sequences)")
+                print(f"  Audio Metrics: RMS={val_res['ar_rms']:.4f} | Silence={val_res['ar_silence_pct']:.1f}% | Repetition={val_res['ar_repetition_rate_pct']:.1f}% | Unique={val_res['ar_unique_tokens']}/150")
                 print(f"  Synthesized audio: {val_res['synth_wav']}")
+
+                history.append(val_res)
+                with open(history_json_path, 'w') as f:
+                    json.dump(history, f, indent=2)
 
                 is_best = val_res['val_loss'] < best_val_loss
                 if is_best:
@@ -371,6 +425,9 @@ def main():
                         if is_best:
                             shutil.copy(best_path, args.drive_dir)
                         shutil.copy(val_res['synth_wav'], args.drive_dir)
+                        shutil.copy(val_res['uncond_wav'], args.drive_dir)
+                        shutil.copy(val_res['tf_wav'], args.drive_dir)
+                        shutil.copy(history_json_path, args.drive_dir)
                         print(f"  ✓ Backed up to Google Drive: {args.drive_dir}")
                     except Exception as e:
                         print(f"  Warning: Drive backup failed: {e}")
