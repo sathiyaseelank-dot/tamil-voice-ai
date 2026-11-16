@@ -472,6 +472,7 @@ def main():
     print("EXPERIMENT V2-P2.5-A TRAINING COMPLETE")
     print(f"Best Validation Loss: {best_val_loss:.4f}")
     print("=" * 80)
+    os._exit(0)
 
 
 if __name__ == '__main__':
