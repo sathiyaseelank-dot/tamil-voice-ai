@@ -1,0 +1,1362 @@
+{
+  "experiment": "V2-P2.4 Forensic Investigation",
+  "timestamp": "2026-11-16 05:18:03 UTC",
+  "checkpoint": {
+    "path": "/content/tamil-voice-ai/checkpoints_v2_p2_4/tamil_speech_lm_v2_p2_4_best.pt",
+    "step": 4500,
+    "parameters": 87174164,
+    "corpus_hours": 20.73
+  },
+  "findings": {},
+  "teacher_forced_eval": {
+    "mean_overall_accuracy_pct": 7.1000000461936,
+    "mean_cb_accuracies_pct": [
+      11.800000071525574,
+      6.422222219407558,
+      4.866666691377759,
+      5.3111111000180244
+    ],
+    "mean_cb_losses_nats": [
+      4.518257570266724,
+      5.317825508117676,
+      5.54996509552002,
+      5.690839576721191
+    ],
+    "mean_cb_perplexities": [
+      91.67572022998738,
+      203.9399337565455,
+      257.2285773193518,
+      296.14215035160385
+    ],
+    "mean_prediction_entropy": [
+      4.540779542922974,
+      5.37999849319458,
+      5.59760479927063,
+      5.698925113677978
+    ],
+    "mean_ground_truth_entropy": [
+      5.022413682937622,
+      5.242464303970337,
+      5.289586734771729,
+      5.422232723236084
+    ],
+    "mean_unique_tokens_predicted": [
+      130.2,
+      120.4,
+      108.2,
+      113.5
+    ],
+    "mean_unique_tokens_ground_truth": [
+      203.4,
+      247.2,
+      251.7,
+      278.5
+    ],
+    "mean_repetition_pct": [
+      20.02227171492205,
+      19.665924276169267,
+      23.3630289532294,
+      24.097995545657017
+    ],
+    "temporal_accuracy_progression_pct": [
+      7.200000062584877,
+      6.399999996647239,
+      8.0999999307096,
+      5.1499999687075615,
+      8.949999921023846,
+      6.750000081956387,
+      9.799999967217445,
+      5.25000000372529,
+      6.299999943003058
+    ],
+    "top_frequent_predicted_tokens": {
+      "CB0": {
+        "token_ids": [
+          408,
+          953,
+          80,
+          191,
+          738
+        ],
+        "counts": [
+          61,
+          45,
+          42,
+          34,
+          28
+        ],
+        "frequency_pct": [
+          4.518518518518518,
+          3.3333333333333335,
+          3.111111111111111,
+          2.5185185185185186,
+          2.074074074074074
+        ]
+      },
+      "CB1": {
+        "token_ids": [
+          669,
+          367,
+          913,
+          973,
+          761
+        ],
+        "counts": [
+          50,
+          43,
+          41,
+          36,
+          29
+        ],
+        "frequency_pct": [
+          3.7037037037037033,
+          3.185185185185185,
+          3.037037037037037,
+          2.666666666666667,
+          2.148148148148148
+        ]
+      },
+      "CB2": {
+        "token_ids": [
+          740,
+          655,
+          240,
+          201,
+          813
+        ],
+        "counts": [
+          90,
+          81,
+          62,
+          61,
+          45
+        ],
+        "frequency_pct": [
+          6.666666666666667,
+          6.0,
+          4.592592592592593,
+          4.518518518518518,
+          3.3333333333333335
+        ]
+      },
+      "CB3": {
+        "token_ids": [
+          388,
+          741,
+          641,
+          673,
+          1019
+        ],
+        "counts": [
+          107,
+          68,
+          59,
+          40,
+          38
+        ],
+        "frequency_pct": [
+          7.9259259259259265,
+          5.037037037037037,
+          4.37037037037037,
+          2.9629629629629632,
+          2.814814814814815
+        ]
+      }
+    },
+    "per_sample_details": [
+      {
+        "sample_id": "sample_01",
+        "overall_accuracy": 0.03444444388151169,
+        "cb_accuracy": [
+          0.07111111283302307,
+          0.035555556416511536,
+          0.011111111380159855,
+          0.019999999552965164
+        ],
+        "cb_loss": [
+          4.939181804656982,
+          5.868718147277832,
+          6.040177822113037,
+          6.272267818450928
+        ],
+        "cb_ppl": [
+          139.65593696411452,
+          353.79517616523486,
+          419.96770779243803,
+          529.6772286337418
+        ],
+        "pred_entropy": [
+          4.823415279388428,
+          5.749996662139893,
+          5.95535135269165,
+          6.079172134399414
+        ],
+        "gt_entropy": [
+          5.133699417114258,
+          5.318192005157471,
+          5.409852981567383,
+          5.615447044372559
+        ],
+        "pred_unique_tokens": [
+          116,
+          126,
+          104,
+          116
+        ],
+        "gt_unique_tokens": [
+          218,
+          267,
+          274,
+          309
+        ],
+        "repetition_pct": [
+          16.70378619153675,
+          15.812917594654788,
+          25.612472160356347,
+          21.380846325167038
+        ]
+      },
+      {
+        "sample_id": "sample_02",
+        "overall_accuracy": 0.08444444090127945,
+        "cb_accuracy": [
+          0.12666666507720947,
+          0.05999999865889549,
+          0.07555555552244186,
+          0.07555555552244186
+        ],
+        "cb_loss": [
+          4.763076305389404,
+          5.4237260818481445,
+          5.529184341430664,
+          5.639408588409424
+        ],
+        "cb_ppl": [
+          117.10562500850625,
+          226.72233656699734,
+          251.9383315345141,
+          281.296307374836
+        ],
+        "pred_entropy": [
+          4.746654033660889,
+          5.48456335067749,
+          5.580063819885254,
+          5.640547752380371
+        ],
+        "gt_entropy": [
+          5.027588844299316,
+          5.194748878479004,
+          5.235197067260742,
+          5.445271015167236
+        ],
+        "pred_unique_tokens": [
+          151,
+          149,
+          109,
+          131
+        ],
+        "gt_unique_tokens": [
+          215,
+          244,
+          249,
+          296
+        ],
+        "repetition_pct": [
+          22.93986636971047,
+          15.812917594654788,
+          20.26726057906459,
+          17.37193763919822
+        ]
+      },
+      {
+        "sample_id": "sample_03",
+        "overall_accuracy": 0.058888889849185944,
+        "cb_accuracy": [
+          0.1088888868689537,
+          0.04888888821005821,
+          0.035555556416511536,
+          0.042222220450639725
+        ],
+        "cb_loss": [
+          4.749117851257324,
+          5.484217166900635,
+          5.756568431854248,
+          5.785412311553955
+        ],
+        "cb_ppl": [
+          115.4823669557569,
+          240.86031674755924,
+          316.2611928587755,
+          325.51622654862786
+        ],
+        "pred_entropy": [
+          4.740573883056641,
+          5.628783702850342,
+          5.783292770385742,
+          5.8535380363464355
+        ],
+        "gt_entropy": [
+          5.151058197021484,
+          5.434930801391602,
+          5.446140289306641,
+          5.504951477050781
+        ],
+        "pred_unique_tokens": [
+          131,
+          130,
+          114,
+          120
+        ],
+        "gt_unique_tokens": [
+          215,
+          279,
+          280,
+          287
+        ],
+        "repetition_pct": [
+          16.926503340757236,
+          18.93095768374165,
+          23.608017817371937,
+          22.494432071269486
+        ]
+      },
+      {
+        "sample_id": "sample_04",
+        "overall_accuracy": 0.05388888716697693,
+        "cb_accuracy": [
+          0.10222221910953522,
+          0.03333333507180214,
+          0.04444444552063942,
+          0.035555556416511536
+        ],
+        "cb_loss": [
+          4.768498420715332,
+          5.743718147277832,
+          5.726677417755127,
+          5.967193126678467
+        ],
+        "cb_ppl": [
+          117.74230974180078,
+          312.22314711519107,
+          306.94771319468225,
+          390.4083047316017
+        ],
+        "pred_entropy": [
+          4.8491339683532715,
+          5.654274940490723,
+          5.8295769691467285,
+          5.899196147918701
+        ],
+        "gt_entropy": [
+          5.152909278869629,
+          5.391142845153809,
+          5.293342113494873,
+          5.546195983886719
+        ],
+        "pred_unique_tokens": [
+          133,
+          133,
+          124,
+          135
+        ],
+        "gt_unique_tokens": [
+          226,
+          270,
+          256,
+          296
+        ],
+        "repetition_pct": [
+          18.93095768374165,
+          18.262806236080177,
+          21.603563474387528,
+          17.14922048997773
+        ]
+      },
+      {
+        "sample_id": "sample_05",
+        "overall_accuracy": 0.08777777850627899,
+        "cb_accuracy": [
+          0.13555555045604706,
+          0.09111110866069794,
+          0.06444444507360458,
+          0.05999999865889549
+        ],
+        "cb_loss": [
+          4.267451763153076,
+          5.016695499420166,
+          5.305916786193848,
+          5.450712203979492
+        ],
+        "cb_ppl": [
+          71.33961356812767,
+          150.91179082786033,
+          201.5256737040746,
+          232.92399624518438
+        ],
+        "pred_entropy": [
+          4.3540544509887695,
+          5.132750511169434,
+          5.363333225250244,
+          5.50368595123291
+        ],
+        "gt_entropy": [
+          4.84303617477417,
+          5.095102787017822,
+          5.1079535484313965,
+          5.333620548248291
+        ],
+        "pred_unique_tokens": [
+          115,
+          103,
+          79,
+          96
+        ],
+        "gt_unique_tokens": [
+          177,
+          225,
+          217,
+          263
+        ],
+        "repetition_pct": [
+          19.821826280623608,
+          22.494432071269486,
+          30.957683741648108,
+          27.839643652561247
+        ]
+      },
+      {
+        "sample_id": "sample_06",
+        "overall_accuracy": 0.09111110866069794,
+        "cb_accuracy": [
+          0.11777777969837189,
+          0.10444444417953491,
+          0.06666667014360428,
+          0.07555555552244186
+        ],
+        "cb_loss": [
+          4.272031784057617,
+          4.867680072784424,
+          5.296080589294434,
+          5.377194881439209
+        ],
+        "cb_ppl": [
+          71.66709986417051,
+          130.01893228119738,
+          199.55314449370337,
+          216.4143552547522
+        ],
+        "pred_entropy": [
+          4.400225639343262,
+          5.1256422996521,
+          5.419509410858154,
+          5.549036979675293
+        ],
+        "gt_entropy": [
+          5.087209224700928,
+          5.048401832580566,
+          5.137603759765625,
+          5.342025279998779
+        ],
+        "pred_unique_tokens": [
+          123,
+          94,
+          86,
+          93
+        ],
+        "gt_unique_tokens": [
+          217,
+          218,
+          222,
+          260
+        ],
+        "repetition_pct": [
+          25.612472160356347,
+          25.389755011135858,
+          30.734966592427615,
+          32.73942093541203
+        ]
+      },
+      {
+        "sample_id": "sample_07",
+        "overall_accuracy": 0.09000000357627869,
+        "cb_accuracy": [
+          0.15555556118488312,
+          0.09333333373069763,
+          0.04888888821005821,
+          0.06222222372889519
+        ],
+        "cb_loss": [
+          4.234317779541016,
+          5.0842719078063965,
+          5.207681179046631,
+          5.411715030670166
+        ],
+        "cb_ppl": [
+          69.01457951120766,
+          161.46233696304242,
+          182.6699877169113,
+          224.01545178750513
+        ],
+        "pred_entropy": [
+          4.365374565124512,
+          5.1505584716796875,
+          5.405902862548828,
+          5.510754585266113
+        ],
+        "gt_entropy": [
+          4.850426197052002,
+          5.236408233642578,
+          5.292384624481201,
+          5.2751288414001465
+        ],
+        "pred_unique_tokens": [
+          121,
+          100,
+          104,
+          92
+        ],
+        "gt_unique_tokens": [
+          182,
+          244,
+          253,
+          256
+        ],
+        "repetition_pct": [
+          22.271714922049,
+          20.044543429844097,
+          22.494432071269486,
+          25.389755011135858
+        ]
+      },
+      {
+        "sample_id": "sample_08",
+        "overall_accuracy": 0.05944444611668587,
+        "cb_accuracy": [
+          0.10000000149011612,
+          0.05999999865889549,
+          0.03777777776122093,
+          0.03999999910593033
+        ],
+        "cb_loss": [
+          4.546353816986084,
+          5.215666770935059,
+          5.6211419105529785,
+          5.723484039306641
+        ],
+        "cb_ppl": [
+          94.28798952371054,
+          184.13455562698365,
+          276.2046041757594,
+          305.9690763930406
+        ],
+        "pred_entropy": [
+          4.391600608825684,
+          5.3604326248168945,
+          5.630807399749756,
+          5.764530658721924
+        ],
+        "gt_entropy": [
+          5.119814395904541,
+          5.324583530426025,
+          5.437180995941162,
+          5.4786505699157715
+        ],
+        "pred_unique_tokens": [
+          150,
+          140,
+          132,
+          139
+        ],
+        "gt_unique_tokens": [
+          210,
+          252,
+          275,
+          288
+        ],
+        "repetition_pct": [
+          18.70824053452116,
+          19.37639198218263,
+          21.158129175946545,
+          24.94432071269488
+        ]
+      },
+      {
+        "sample_id": "sample_09",
+        "overall_accuracy": 0.0694444477558136,
+        "cb_accuracy": [
+          0.11777777969837189,
+          0.0533333346247673,
+          0.042222220450639725,
+          0.06444444507360458
+        ],
+        "cb_loss": [
+          4.324506759643555,
+          5.229676246643066,
+          5.520884990692139,
+          5.684064865112305
+        ],
+        "cb_ppl": [
+          75.52825008973514,
+          186.73233851138033,
+          249.85605966102776,
+          294.1426533430573
+        ],
+        "pred_entropy": [
+          4.4307403564453125,
+          5.265543460845947,
+          5.531795024871826,
+          5.648219585418701
+        ],
+        "gt_entropy": [
+          4.938342571258545,
+          5.207625865936279,
+          5.234230995178223,
+          5.332629680633545
+        ],
+        "pred_unique_tokens": [
+          130,
+          100,
+          107,
+          100
+        ],
+        "gt_unique_tokens": [
+          193,
+          240,
+          237,
+          264
+        ],
+        "repetition_pct": [
+          19.37639198218263,
+          22.93986636971047,
+          17.817371937639198,
+          26.50334075723831
+        ]
+      },
+      {
+        "sample_id": "sample_10",
+        "overall_accuracy": 0.08055555820465088,
+        "cb_accuracy": [
+          0.14444445073604584,
+          0.06222222372889519,
+          0.05999999865889549,
+          0.0555555559694767
+        ],
+        "cb_loss": [
+          4.318039417266846,
+          5.243885040283203,
+          5.49533748626709,
+          5.596942901611328
+        ],
+        "cb_ppl": [
+          75.04135917947757,
+          189.40451904912504,
+          243.5537083240722,
+          269.60094968740094
+        ],
+        "pred_entropy": [
+          4.306022644042969,
+          5.247438907623291,
+          5.476415157318115,
+          5.540569305419922
+        ],
+        "gt_entropy": [
+          4.920052528381348,
+          5.173506259918213,
+          5.301980972290039,
+          5.348406791687012
+        ],
+        "pred_unique_tokens": [
+          132,
+          129,
+          123,
+          113
+        ],
+        "gt_unique_tokens": [
+          181,
+          233,
+          254,
+          266
+        ],
+        "repetition_pct": [
+          18.93095768374165,
+          17.59465478841871,
+          19.37639198218263,
+          25.16703786191537
+        ]
+      }
+    ]
+  },
+  "codebook_ablations": {
+    "sample_01": {
+      "1_gt_cb0_cb3_reference": {
+        "rms": 0.1547081470489502,
+        "peak": 0.8414585590362549,
+        "spectral_flatness": 0.010988125577569008,
+        "silent_frame_pct": 10.367892976588628,
+        "duration_sec": 6.0,
+        "snr_vs_gt_ref_db": 999.0,
+        "wav_path": "/content/tamil-voice-ai/experiments/v2_p2_4/forensic_audio/sample_01_1_gt_cb0_cb3_reference.wav"
+      },
+      "2_pred_cb0_gt_cb1_3": {
+        "rms": 0.13077323138713837,
+        "peak": 0.7194916605949402,
+        "spectral_flatness": 0.009368514642119408,
+        "silent_frame_pct": 12.709030100334449,
+        "duration_sec": 6.0,
+        "snr_vs_gt_ref_db": -0.02359224110841751,
+        "wav_path": "/content/tamil-voice-ai/experiments/v2_p2_4/forensic_audio/sample_01_2_pred_cb0_gt_cb1_3.wav"
+      },
+      "3_gt_cb0_pred_cb1_3": {
+        "rms": 0.1517389565706253,
+        "peak": 0.6698691844940186,
+        "spectral_flatness": 0.010383810847997665,
+        "silent_frame_pct": 10.535117056856187,
+        "duration_sec": 6.0,
+        "snr_vs_gt_ref_db": 3.852550745010376,
+        "wav_path": "/content/tamil-voice-ai/experiments/v2_p2_4/forensic_audio/sample_01_3_gt_cb0_pred_cb1_3.wav"
+      },
+      "4_pred_cb0_only": {
+        "rms": 0.12576442956924438,
+        "peak": 0.6225236058235168,
+        "spectral_flatness": 0.013222920708358288,
+        "silent_frame_pct": 13.879598662207357,
+        "duration_sec": 6.0,
+        "snr_vs_gt_ref_db": -1.6564924716949463,
+        "wav_path": "/content/tamil-voice-ai/experiments/v2_p2_4/forensic_audio/sample_01_4_pred_cb0_only.wav"
+      },
+      "5_gt_cb0_only": {
+        "rms": 0.14099693298339844,
+        "peak": 0.6564381122589111,
+        "spectral_flatness": 0.01951407827436924,
+        "silent_frame_pct": 10.702341137123746,
+        "duration_sec": 6.0,
+        "snr_vs_gt_ref_db": 6.8239359855651855,
+        "wav_path": "/content/tamil-voice-ai/experiments/v2_p2_4/forensic_audio/sample_01_5_gt_cb0_only.wav"
+      },
+      "6_pred_cb1_only": {
+        "rms": 0.18288159370422363,
+        "peak": 1.179351568222046,
+        "spectral_flatness": 0.014991682022809982,
+        "silent_frame_pct": 0.0,
+        "duration_sec": 6.0,
+        "snr_vs_gt_ref_db": -3.7767159938812256,
+        "wav_path": "/content/tamil-voice-ai/experiments/v2_p2_4/forensic_audio/sample_01_6_pred_cb1_only.wav"
+      },
+      "6_pred_cb2_only": {
+        "rms": 0.19444236159324646,
+        "peak": 0.8039527535438538,
+        "spectral_flatness": 0.007608632557094097,
+        "silent_frame_pct": 0.0,
+        "duration_sec": 6.0,
+        "snr_vs_gt_ref_db": -4.137677192687988,
+        "wav_path": "/content/tamil-voice-ai/experiments/v2_p2_4/forensic_audio/sample_01_6_pred_cb2_only.wav"
+      },
+      "6_pred_cb3_only": {
+        "rms": 0.20447249710559845,
+        "peak": 0.8662018775939941,
+        "spectral_flatness": 0.011983153410255909,
+        "silent_frame_pct": 0.8361204013377926,
+        "duration_sec": 6.0,
+        "snr_vs_gt_ref_db": -4.423153400421143,
+        "wav_path": "/content/tamil-voice-ai/experiments/v2_p2_4/forensic_audio/sample_01_6_pred_cb3_only.wav"
+      },
+      "7_all_pred_cb0_cb3_tf": {
+        "rms": 0.14180414378643036,
+        "peak": 0.7716010212898254,
+        "spectral_flatness": 0.007425915915518999,
+        "silent_frame_pct": 13.210702341137123,
+        "duration_sec": 6.0,
+        "snr_vs_gt_ref_db": -1.904637098312378,
+        "wav_path": "/content/tamil-voice-ai/experiments/v2_p2_4/forensic_audio/sample_01_7_all_pred_cb0_cb3_tf.wav"
+      }
+    },
+    "sample_03": {
+      "1_gt_cb0_cb3_reference": {
+        "rms": 0.15059919655323029,
+        "peak": 0.8099212646484375,
+        "spectral_flatness": 0.007814972661435604,
+        "silent_frame_pct": 15.719063545150503,
+        "duration_sec": 6.0,
+        "snr_vs_gt_ref_db": 999.0,
+        "wav_path": "/content/tamil-voice-ai/experiments/v2_p2_4/forensic_audio/sample_03_1_gt_cb0_cb3_reference.wav"
+      },
+      "2_pred_cb0_gt_cb1_3": {
+        "rms": 0.1358940750360489,
+        "peak": 0.7005608081817627,
+        "spectral_flatness": 0.00815024133771658,
+        "silent_frame_pct": 18.394648829431436,
+        "duration_sec": 6.0,
+        "snr_vs_gt_ref_db": 0.7846016883850098,
+        "wav_path": "/content/tamil-voice-ai/experiments/v2_p2_4/forensic_audio/sample_03_2_pred_cb0_gt_cb1_3.wav"
+      },
+      "3_gt_cb0_pred_cb1_3": {
+        "rms": 0.14194509387016296,
+        "peak": 0.7311140894889832,
+        "spectral_flatness": 0.006560943089425564,
+        "silent_frame_pct": 15.88628762541806,
+        "duration_sec": 6.0,
+        "snr_vs_gt_ref_db": 4.301483631134033,
+        "wav_path": "/content/tamil-voice-ai/experiments/v2_p2_4/forensic_audio/sample_03_3_gt_cb0_pred_cb1_3.wav"
+      },
+      "4_pred_cb0_only": {
+        "rms": 0.1228860393166542,
+        "peak": 0.6310587525367737,
+        "spectral_flatness": 0.011757884174585342,
+        "silent_frame_pct": 20.066889632107024,
+        "duration_sec": 6.0,
+        "snr_vs_gt_ref_db": -1.010114312171936,
+        "wav_path": "/content/tamil-voice-ai/experiments/v2_p2_4/forensic_audio/sample_03_4_pred_cb0_only.wav"
+      },
+      "5_gt_cb0_only": {
+        "rms": 0.13218997418880463,
+        "peak": 0.7152873277664185,
+        "spectral_flatness": 0.012535340152680874,
+        "silent_frame_pct": 16.555183946488295,
+        "duration_sec": 6.0,
+        "snr_vs_gt_ref_db": 6.277465343475342,
+        "wav_path": "/content/tamil-voice-ai/experiments/v2_p2_4/forensic_audio/sample_03_5_gt_cb0_only.wav"
+      },
+      "6_pred_cb1_only": {
+        "rms": 0.19687038660049438,
+        "peak": 0.9606963992118835,
+        "spectral_flatness": 0.00891961995512247,
+        "silent_frame_pct": 0.0,
+        "duration_sec": 6.0,
+        "snr_vs_gt_ref_db": -4.254759788513184,
+        "wav_path": "/content/tamil-voice-ai/experiments/v2_p2_4/forensic_audio/sample_03_6_pred_cb1_only.wav"
+      },
+      "6_pred_cb2_only": {
+        "rms": 0.19761861860752106,
+        "peak": 1.5749346017837524,
+        "spectral_flatness": 0.011746108531951904,
+        "silent_frame_pct": 0.33444816053511706,
+        "duration_sec": 6.0,
+        "snr_vs_gt_ref_db": -4.341915130615234,
+        "wav_path": "/content/tamil-voice-ai/experiments/v2_p2_4/forensic_audio/sample_03_6_pred_cb2_only.wav"
+      },
+      "6_pred_cb3_only": {
+        "rms": 0.20575058460235596,
+        "peak": 1.271701693534851,
+        "spectral_flatness": 0.01201554574072361,
+        "silent_frame_pct": 0.33444816053511706,
+        "duration_sec": 6.0,
+        "snr_vs_gt_ref_db": -4.573642253875732,
+        "wav_path": "/content/tamil-voice-ai/experiments/v2_p2_4/forensic_audio/sample_03_6_pred_cb3_only.wav"
+      },
+      "7_all_pred_cb0_cb3_tf": {
+        "rms": 0.13303452730178833,
+        "peak": 0.6841078400611877,
+        "spectral_flatness": 0.0055497558787465096,
+        "silent_frame_pct": 18.729096989966553,
+        "duration_sec": 6.0,
+        "snr_vs_gt_ref_db": -1.046834111213684,
+        "wav_path": "/content/tamil-voice-ai/experiments/v2_p2_4/forensic_audio/sample_03_7_all_pred_cb0_cb3_tf.wav"
+      }
+    }
+  },
+  "autoregressive_collapse": {
+    "frame_steps": [
+      10,
+      20,
+      40,
+      80,
+      160
+    ],
+    "mean_progression": {
+      "10": {
+        "mean_accuracy_pct": 2.0000000298023224,
+        "mean_rms": 0.15957231662468985,
+        "mean_silence_pct": 40.0,
+        "mean_repetition_pct": 18.333333333333332
+      },
+      "20": {
+        "mean_accuracy_pct": 1.0000000149011612,
+        "mean_rms": 0.1668056172260549,
+        "mean_silence_pct": 40.0,
+        "mean_repetition_pct": 25.789473684210527
+      },
+      "40": {
+        "mean_accuracy_pct": 0.7500000018626451,
+        "mean_rms": 0.14539078180096113,
+        "mean_silence_pct": 48.84615384615385,
+        "mean_repetition_pct": 36.282051282051285
+      },
+      "80": {
+        "mean_accuracy_pct": 0.625,
+        "mean_rms": 0.1034487453114707,
+        "mean_silence_pct": 72.38095238095238,
+        "mean_repetition_pct": 56.39240506329114
+      },
+      "160": {
+        "mean_accuracy_pct": 0.3125000124176343,
+        "mean_rms": 0.12149947136640549,
+        "mean_silence_pct": 77.20125786163521,
+        "mean_repetition_pct": 70.54507337526205
+      }
+    },
+    "per_sample_trajectories": {
+      "sample_01": {
+        "10": {
+          "frame_count": 10,
+          "duration_sec": 0.13333333333333333,
+          "accuracy_vs_gt_continuation_pct": 0.0,
+          "repetition_pct": 2.7777777777777777,
+          "unique_tokens_by_cb": [
+            8,
+            9,
+            9,
+            8
+          ],
+          "rms": 0.26950645446777344,
+          "silence_pct": 0.0,
+          "spectral_flatness": 0.0008717944729141891
+        },
+        "20": {
+          "frame_count": 20,
+          "duration_sec": 0.26666666666666666,
+          "accuracy_vs_gt_continuation_pct": 0.0,
+          "repetition_pct": 2.631578947368421,
+          "unique_tokens_by_cb": [
+            17,
+            17,
+            19,
+            17
+          ],
+          "rms": 0.20606568455696106,
+          "silence_pct": 0.0,
+          "spectral_flatness": 0.0005021223914809525
+        },
+        "40": {
+          "frame_count": 40,
+          "duration_sec": 0.5333333333333333,
+          "accuracy_vs_gt_continuation_pct": 0.0,
+          "repetition_pct": 31.41025641025641,
+          "unique_tokens_by_cb": [
+            23,
+            23,
+            28,
+            21
+          ],
+          "rms": 0.14584313333034515,
+          "silence_pct": 40.38461538461539,
+          "spectral_flatness": 0.0007734959945082664
+        },
+        "80": {
+          "frame_count": 80,
+          "duration_sec": 1.0666666666666667,
+          "accuracy_vs_gt_continuation_pct": 0.0,
+          "repetition_pct": 59.81012658227848,
+          "unique_tokens_by_cb": [
+            24,
+            25,
+            29,
+            22
+          ],
+          "rms": 0.10312675684690475,
+          "silence_pct": 70.47619047619048,
+          "spectral_flatness": 0.0011346086394041777
+        },
+        "160": {
+          "frame_count": 160,
+          "duration_sec": 2.1333333333333333,
+          "accuracy_vs_gt_continuation_pct": 0.0,
+          "repetition_pct": 79.87421383647799,
+          "unique_tokens_by_cb": [
+            24,
+            25,
+            29,
+            22
+          ],
+          "rms": 0.0729217678308487,
+          "silence_pct": 85.37735849056604,
+          "spectral_flatness": 0.0005882859695702791
+        }
+      },
+      "sample_02": {
+        "10": {
+          "frame_count": 10,
+          "duration_sec": 0.13333333333333333,
+          "accuracy_vs_gt_continuation_pct": 0.0,
+          "repetition_pct": 2.7777777777777777,
+          "unique_tokens_by_cb": [
+            8,
+            10,
+            9,
+            10
+          ],
+          "rms": 0.26966753602027893,
+          "silence_pct": 0.0,
+          "spectral_flatness": 0.00100485619623214
+        },
+        "20": {
+          "frame_count": 20,
+          "duration_sec": 0.26666666666666666,
+          "accuracy_vs_gt_continuation_pct": 0.0,
+          "repetition_pct": 7.894736842105263,
+          "unique_tokens_by_cb": [
+            14,
+            19,
+            17,
+            19
+          ],
+          "rms": 0.30864232778549194,
+          "silence_pct": 0.0,
+          "spectral_flatness": 0.00023466219136025757
+        },
+        "40": {
+          "frame_count": 40,
+          "duration_sec": 0.5333333333333333,
+          "accuracy_vs_gt_continuation_pct": 0.0,
+          "repetition_pct": 8.333333333333332,
+          "unique_tokens_by_cb": [
+            26,
+            35,
+            32,
+            33
+          ],
+          "rms": 0.23379230499267578,
+          "silence_pct": 3.8461538461538463,
+          "spectral_flatness": 0.00026957422960549593
+        },
+        "80": {
+          "frame_count": 80,
+          "duration_sec": 1.0666666666666667,
+          "accuracy_vs_gt_continuation_pct": 0.0,
+          "repetition_pct": 36.392405063291136,
+          "unique_tokens_by_cb": [
+            30,
+            40,
+            36,
+            36
+          ],
+          "rms": 0.16531656682491302,
+          "silence_pct": 52.38095238095239,
+          "spectral_flatness": 0.00031437966390512884
+        },
+        "160": {
+          "frame_count": 160,
+          "duration_sec": 2.1333333333333333,
+          "accuracy_vs_gt_continuation_pct": 0.937500037252903,
+          "repetition_pct": 66.66666666666666,
+          "unique_tokens_by_cb": [
+            30,
+            40,
+            36,
+            37
+          ],
+          "rms": 0.11689653247594833,
+          "silence_pct": 76.41509433962264,
+          "spectral_flatness": 0.0002677047159522772
+        }
+      },
+      "sample_03": {
+        "10": {
+          "frame_count": 10,
+          "duration_sec": 0.13333333333333333,
+          "accuracy_vs_gt_continuation_pct": 0.0,
+          "repetition_pct": 2.7777777777777777,
+          "unique_tokens_by_cb": [
+            9,
+            10,
+            7,
+            8
+          ],
+          "rms": 0.2539360523223877,
+          "silence_pct": 0.0,
+          "spectral_flatness": 0.00045266147935763
+        },
+        "20": {
+          "frame_count": 20,
+          "duration_sec": 0.26666666666666666,
+          "accuracy_vs_gt_continuation_pct": 0.0,
+          "repetition_pct": 5.263157894736842,
+          "unique_tokens_by_cb": [
+            17,
+            16,
+            12,
+            14
+          ],
+          "rms": 0.31592243909835815,
+          "silence_pct": 0.0,
+          "spectral_flatness": 0.00034575650352053344
+        },
+        "40": {
+          "frame_count": 40,
+          "duration_sec": 0.5333333333333333,
+          "accuracy_vs_gt_continuation_pct": 0.0,
+          "repetition_pct": 4.487179487179487,
+          "unique_tokens_by_cb": [
+            23,
+            25,
+            21,
+            25
+          ],
+          "rms": 0.3448818027973175,
+          "silence_pct": 0.0,
+          "spectral_flatness": 0.00022761666332371533
+        },
+        "80": {
+          "frame_count": 80,
+          "duration_sec": 1.0666666666666667,
+          "accuracy_vs_gt_continuation_pct": 0.0,
+          "repetition_pct": 30.063291139240505,
+          "unique_tokens_by_cb": [
+            32,
+            36,
+            33,
+            37
+          ],
+          "rms": 0.24703490734100342,
+          "silence_pct": 39.04761904761905,
+          "spectral_flatness": 0.00033447818714194
+        },
+        "160": {
+          "frame_count": 160,
+          "duration_sec": 2.1333333333333333,
+          "accuracy_vs_gt_continuation_pct": 0.0,
+          "repetition_pct": 65.09433962264151,
+          "unique_tokens_by_cb": [
+            32,
+            36,
+            33,
+            37
+          ],
+          "rms": 0.17468011379241943,
+          "silence_pct": 69.81132075471697,
+          "spectral_flatness": 0.0002840006782207638
+        }
+      },
+      "sample_04": {
+        "10": {
+          "frame_count": 10,
+          "duration_sec": 0.13333333333333333,
+          "accuracy_vs_gt_continuation_pct": 0.0,
+          "repetition_pct": 63.888888888888886,
+          "unique_tokens_by_cb": [
+            2,
+            3,
+            4,
+            5
+          ],
+          "rms": 0.0005861227982677519,
+          "silence_pct": 100.0,
+          "spectral_flatness": 0.006267901510000229
+        },
+        "20": {
+          "frame_count": 20,
+          "duration_sec": 0.26666666666666666,
+          "accuracy_vs_gt_continuation_pct": 0.0,
+          "repetition_pct": 68.42105263157895,
+          "unique_tokens_by_cb": [
+            2,
+            4,
+            4,
+            5
+          ],
+          "rms": 0.0004408980894368142,
+          "silence_pct": 100.0,
+          "spectral_flatness": 0.004044814966619015
+        },
+        "40": {
+          "frame_count": 40,
+          "duration_sec": 0.5333333333333333,
+          "accuracy_vs_gt_continuation_pct": 0.6250000093132257,
+          "repetition_pct": 73.07692307692307,
+          "unique_tokens_by_cb": [
+            2,
+            4,
+            4,
+            5
+          ],
+          "rms": 0.00034023888292722404,
+          "silence_pct": 100.0,
+          "spectral_flatness": 0.0026846728287637234
+        },
+        "80": {
+          "frame_count": 80,
+          "duration_sec": 1.0666666666666667,
+          "accuracy_vs_gt_continuation_pct": 1.5625,
+          "repetition_pct": 76.58227848101265,
+          "unique_tokens_by_cb": [
+            3,
+            4,
+            5,
+            6
+          ],
+          "rms": 0.0002766172692645341,
+          "silence_pct": 100.0,
+          "spectral_flatness": 0.0017105353763327003
+        }
+      },
+      "sample_05": {
+        "10": {
+          "frame_count": 10,
+          "duration_sec": 0.13333333333333333,
+          "accuracy_vs_gt_continuation_pct": 10.000000149011612,
+          "repetition_pct": 19.444444444444446,
+          "unique_tokens_by_cb": [
+            4,
+            8,
+            9,
+            8
+          ],
+          "rms": 0.004165417514741421,
+          "silence_pct": 100.0,
+          "spectral_flatness": 0.0005271945265121758
+        },
+        "20": {
+          "frame_count": 20,
+          "duration_sec": 0.26666666666666666,
+          "accuracy_vs_gt_continuation_pct": 5.000000074505806,
+          "repetition_pct": 44.73684210526316,
+          "unique_tokens_by_cb": [
+            5,
+            9,
+            11,
+            9
+          ],
+          "rms": 0.0029567366000264883,
+          "silence_pct": 100.0,
+          "spectral_flatness": 0.000743381679058075
+        },
+        "40": {
+          "frame_count": 40,
+          "duration_sec": 0.5333333333333333,
+          "accuracy_vs_gt_continuation_pct": 3.125,
+          "repetition_pct": 64.1025641025641,
+          "unique_tokens_by_cb": [
+            6,
+            9,
+            11,
+            10
+          ],
+          "rms": 0.0020964290015399456,
+          "silence_pct": 100.0,
+          "spectral_flatness": 0.0005156162660568953
+        },
+        "80": {
+          "frame_count": 80,
+          "duration_sec": 1.0666666666666667,
+          "accuracy_vs_gt_continuation_pct": 1.5625,
+          "repetition_pct": 79.11392405063292,
+          "unique_tokens_by_cb": [
+            6,
+            9,
+            11,
+            10
+          ],
+          "rms": 0.0014888782752677798,
+          "silence_pct": 100.0,
+          "spectral_flatness": 0.0004447432002052665
+        }
+      }
+    }
+  },
+  "sampling_audit": {
+    "greedy": {
+      "config": {
+        "name": "greedy",
+        "temperature": 0.0,
+        "top_k": 0,
+        "top_p": 1.0,
+        "rep_penalty": 1.0
+      },
+      "unique_tokens": [
+        5,
+        8,
+        7,
+        6
+      ],
+      "repetition_pct": 85.25641025641025,
+      "rms": 0.04227106645703316,
+      "silence_pct": 78.84615384615384,
+      "spectral_flatness": 0.0002773129381239414,
+      "wav_path": "/content/tamil-voice-ai/experiments/v2_p2_4/forensic_audio/sampling_greedy_sample03.wav"
+    },
+    "temp_0_7": {
+      "config": {
+        "name": "temp_0_7",
+        "temperature": 0.7,
+        "top_k": 50,
+        "top_p": 0.9,
+        "rep_penalty": 1.0
+      },
+      "unique_tokens": [
+        10,
+        22,
+        19,
+        28
+      ],
+      "repetition_pct": 12.82051282051282,
+      "rms": 0.12532640993595123,
+      "silence_pct": 0.0,
+      "spectral_flatness": 3.911599924322218e-05,
+      "wav_path": "/content/tamil-voice-ai/experiments/v2_p2_4/forensic_audio/sampling_temp_0_7_sample03.wav"
+    },
+    "temp_1_0": {
+      "config": {
+        "name": "temp_1_0",
+        "temperature": 1.0,
+        "top_k": 50,
+        "top_p": 0.9,
+        "rep_penalty": 1.0
+      },
+      "unique_tokens": [
+        18,
+        16,
+        19,
+        22
+      ],
+      "repetition_pct": 33.33333333333333,
+      "rms": 0.04457307606935501,
+      "silence_pct": 57.692307692307686,
+      "spectral_flatness": 0.007300635799765587,
+      "wav_path": "/content/tamil-voice-ai/experiments/v2_p2_4/forensic_audio/sampling_temp_1_0_sample03.wav"
+    },
+    "temp_1_2": {
+      "config": {
+        "name": "temp_1_2",
+        "temperature": 1.2,
+        "top_k": 50,
+        "top_p": 0.9,
+        "rep_penalty": 1.0
+      },
+      "unique_tokens": [
+        26,
+        24,
+        24,
+        24
+      ],
+      "repetition_pct": 12.179487179487179,
+      "rms": 0.015989894047379494,
+      "silence_pct": 75.0,
+      "spectral_flatness": 0.03226858749985695,
+      "wav_path": "/content/tamil-voice-ai/experiments/v2_p2_4/forensic_audio/sampling_temp_1_2_sample03.wav"
+    }
+  },
+  "codec_reconstruction_control": {
+    "original": {
+      "rms": 0.15258750703511237,
+      "peak": 0.9000244140625,
+      "spectral_flatness": 0.008040157637684663,
+      "silent_frame_pct": 15.551839464882944,
+      "duration_sec": 6.0
+    },
+    "codec_recon_4cb": {
+      "rms": 0.15059919655323029,
+      "peak": 0.8099212646484375,
+      "spectral_flatness": 0.007814972661435604,
+      "silent_frame_pct": 15.719063545150503,
+      "duration_sec": 6.0,
+      "snr_vs_original_db": 9.325198640447113
+    },
+    "codec_recon_cb0_only": {
+      "rms": 0.13218997418880463,
+      "peak": 0.7152873277664185,
+      "spectral_flatness": 0.012535340152680874,
+      "silent_frame_pct": 16.555183946488295,
+      "duration_sec": 6.0,
+      "snr_vs_original_db": 5.133851450987004
+    }
+  }
+}
