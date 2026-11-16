@@ -42,6 +42,7 @@ class TextlessTamilSpeechLM_CB0(nn.Module):
         self.vocab_size = audio_cfg.vocab_size  # 1024 + 5 special tokens = 1029
         self.pad_token_id = audio_cfg.pad_token_id  # 1024
         self.bos_token_id = audio_cfg.bos_token_id  # 1025
+        self.eos_token_id = audio_cfg.eos_token_id  # 1026
         self.d_model = self.config.d_model  # 1024
 
         # Single CB0 token embedding
