@@ -43,23 +43,23 @@ def parse_args():
     parser.add_argument("--mode", type=str, choices=["a1", "a2", "random", "transferred"], default="a2",
                         help="Experiment mode: 'a1'/'random' (random initialization) or 'a2'/'transferred' (transferred weights from checkpoint)")
     parser.add_argument("--warm_start_checkpoint", type=str,
-                        default=os.path.join(REPO_ROOT, "checkpoints_v2_p2_4", "tamil_speech_lm_v2_p2_4_best.pt"),
-                        help="Path to trained 4-codebook checkpoint to warm-start trunk and CB0 head (for mode a2)")
+                        default=os.path.join(REPO_ROOT, "checkpoints", "tamil_speech_lm_cb0_wsp_corrected.pt"),
+                        help="Path to trained or WSP-corrected checkpoint to warm-start trunk and CB0 head (for mode a2)")
     parser.add_argument("--val_tokens_path", type=str, default=os.path.join(REPO_ROOT, "data", "v2_p2_4", "v2_p2_4_val_tokens.pt"),
                         help="Path to pre-encoded full held-out validation tokens dataset")
-    parser.add_argument("--output_dir", type=str, default=None,
-                        help="Output checkpoint directory (defaults to checkpoints_v2_p2_5_a1 or a2)")
+    parser.add_argument("--output_dir", type=str, default=os.path.join(REPO_ROOT, "checkpoints", "wsp_finetuned"),
+                        help="Output checkpoint directory")
     parser.add_argument("--drive_dir", type=str, default=None,
-                        help="Google Drive backup directory (defaults based on mode)")
-    parser.add_argument("--max_steps", type=int, default=2000, help="Total training steps")
-    parser.add_argument("--lr", type=float, default=1.5e-4, help="Peak learning rate")
-    parser.add_argument("--min_lr", type=float, default=1.0e-5, help="Minimum learning rate")
-    parser.add_argument("--warmup_steps", type=int, default=100, help="Warmup steps")
+                        help="Google Drive backup directory")
+    parser.add_argument("--max_steps", type=int, default=1000, help="Total training steps")
+    parser.add_argument("--lr", type=float, default=5.0e-5, help="Peak fine-tuning learning rate")
+    parser.add_argument("--min_lr", type=float, default=5.0e-6, help="Minimum learning rate")
+    parser.add_argument("--warmup_steps", type=int, default=50, help="Warmup steps")
     parser.add_argument("--micro_batch_size", type=int, default=2, help="Micro batch size")
     parser.add_argument("--grad_accum", type=int, default=8, help="Gradient accumulation steps")
     parser.add_argument("--log_every", type=int, default=10, help="Logging step interval")
-    parser.add_argument("--eval_every", type=int, default=250, help="Validation step interval")
-    parser.add_argument("--save_every", type=int, default=250, help="Checkpoint save interval")
+    parser.add_argument("--eval_every", type=int, default=100, help="Validation step interval")
+    parser.add_argument("--save_every", type=int, default=100, help="Checkpoint save interval")
     parser.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu")
     parser.add_argument("--seed", type=int, default=2026, help="Random seed")
     return parser.parse_args()
@@ -90,6 +90,10 @@ def load_validation_corpus(val_tokens_path: str, tokenizer: AudioCodecTokenizer,
     base_dir = os.path.join(REPO_ROOT, 'experiments', 'v2_p1', 'wavs')
     for i in range(1, 11):
         wav_path = os.path.join(base_dir, f'sample_{i:02d}_original.wav')
+        if not os.path.exists(wav_path):
+            sample_candidate = os.path.join(REPO_ROOT, 'samples', f'user_turn_{i-1:04d}.wav')
+            if os.path.exists(sample_candidate):
+                wav_path = sample_candidate
         if os.path.exists(wav_path):
             y, sr = sf.read(wav_path)
             w_t = torch.from_numpy(y).float().unsqueeze(0).unsqueeze(0).to(device)
@@ -257,10 +261,17 @@ def main():
         print(f"\nInitializing {exp_code}: Random parameter initialization (Normal/Xavier, seed={args.seed}).")
         model = TextlessTamilSpeechLM_CB0(model_cfg).to(device)
     else:
-        print(f"\nInitializing {exp_code}: Transferring compatible weights from {args.warm_start_checkpoint}...")
+        print(f"\nInitializing {exp_code}: Loading checkpoint from {args.warm_start_checkpoint}...")
         if not os.path.exists(args.warm_start_checkpoint):
             raise FileNotFoundError(f"Warm-start checkpoint not found: {args.warm_start_checkpoint}")
-        model = TextlessTamilSpeechLM_CB0.from_pretrained_multicodebook(args.warm_start_checkpoint, model_cfg).to(device)
+        raw_ckpt = torch.load(args.warm_start_checkpoint, map_location=device, weights_only=False)
+        sd = raw_ckpt.get('model_state_dict', raw_sd if 'raw_sd' in locals() else raw_ckpt)
+        model = TextlessTamilSpeechLM_CB0(model_cfg).to(device)
+        if 'embedding.weight' in sd and 'head.weight' in sd:
+            model.load_state_dict(sd)
+            print(f"✓ Directly loaded native CB0 model state dict from {args.warm_start_checkpoint}")
+        else:
+            model = TextlessTamilSpeechLM_CB0.from_pretrained_multicodebook(args.warm_start_checkpoint, model_cfg).to(device)
 
     total_params = sum(p.numel() for p in model.parameters())
     trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
@@ -291,8 +302,10 @@ def main():
 
     # 4. Data Pipeline Setup (Streaming IndicVoices-R_Tamil)
     print("\nConnecting to streaming Tamil training corpus...")
+    import io
+    import torchaudio
     dataset = load_dataset("SPRINGLab/IndicVoices-R_Tamil", split="train", streaming=True)
-    dataset = dataset.cast_column("audio", Audio(sampling_rate=24000))
+    dataset = dataset.cast_column("audio", Audio(decode=False))
     data_iter = iter(dataset)
 
     # Mandatory held-out evaluation speakers to strictly avoid training contamination
@@ -322,15 +335,33 @@ def main():
         if spk in held_out_speaker_ids:
             continue
 
-        audio_arr = item['audio']['array']
-        dur = len(audio_arr) / 24000.0
+        audio_entry = item.get('audio', {})
+        if "array" in audio_entry and audio_entry["array"] is not None:
+            raw_audio = np.array(audio_entry["array"])
+            sr = audio_entry.get("sampling_rate", 24000)
+        elif "bytes" in audio_entry and audio_entry["bytes"] is not None:
+            raw_audio, sr = sf.read(io.BytesIO(audio_entry["bytes"]))
+        else:
+            continue
+
+        dur = len(raw_audio) / float(sr)
         if dur < 1.0 or dur > 20.0:
             continue
 
+        wav = torch.from_numpy(raw_audio).float()
+        if wav.ndim == 1:
+            wav = wav.unsqueeze(0).unsqueeze(0)
+        elif wav.ndim == 2:
+            wav = wav.mean(dim=-1, keepdim=True).transpose(0, 1).unsqueeze(0)
+
+        if sr != 24000:
+            wav = torchaudio.functional.resample(wav, sr, 24000)
+
+        wav = wav.to(device)
+
         # Encode CB0 on-the-fly
-        w_t = torch.from_numpy(audio_arr).float().unsqueeze(0).unsqueeze(0).to(device)
         with torch.no_grad():
-            toks_4cb = tokenizer.encode(w_t, 24000)
+            toks_4cb = tokenizer.encode(wav, 24000)
             toks_cb0 = toks_4cb[:, 0, :]  # (1, T)
 
         seq_len = toks_cb0.shape[-1]
