@@ -37,14 +37,16 @@ from tokenizer.codec import AudioCodecTokenizer
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="V2-P2.5-A: Single-Codebook (CB0) Training")
+    parser = argparse.ArgumentParser(description="V2-P2.5-A: Single-Codebook (CB0) Training (Dual-Mode: A1 & A2)")
+    parser.add_argument("--mode", type=str, choices=["a1", "a2", "random", "transferred"], default="a2",
+                        help="Experiment mode: 'a1'/'random' (random initialization) or 'a2'/'transferred' (transferred weights from checkpoint)")
     parser.add_argument("--warm_start_checkpoint", type=str,
                         default="/content/tamil-voice-ai/checkpoints_v2_p2_4/tamil_speech_lm_v2_p2_4_best.pt",
-                        help="Path to trained 4-codebook checkpoint to warm-start trunk and CB0 head")
-    parser.add_argument("--output_dir", type=str, default="/content/tamil-voice-ai/checkpoints_v2_p2_5_a",
-                        help="Output checkpoint directory")
-    parser.add_argument("--drive_dir", type=str, default="/content/drive/MyDrive/tamil_voice_ai_checkpoints/v2_p2_5_a",
-                        help="Google Drive backup directory")
+                        help="Path to trained 4-codebook checkpoint to warm-start trunk and CB0 head (for mode a2)")
+    parser.add_argument("--output_dir", type=str, default=None,
+                        help="Output checkpoint directory (defaults to checkpoints_v2_p2_5_a1 or a2)")
+    parser.add_argument("--drive_dir", type=str, default=None,
+                        help="Google Drive backup directory (defaults based on mode)")
     parser.add_argument("--max_steps", type=int, default=2000, help="Total training steps")
     parser.add_argument("--lr", type=float, default=1.5e-4, help="Peak learning rate")
     parser.add_argument("--min_lr", type=float, default=1.0e-5, help="Minimum learning rate")
@@ -147,14 +149,27 @@ def main():
     args = parse_args()
     set_seed(args.seed)
 
+    is_random = args.mode in ["a1", "random"]
+    exp_code = "P2.5-A1" if is_random else "P2.5-A2"
+    exp_name = f"V2-P2.5-{'A1 (Random Initialization)' if is_random else 'A2 (Transferred Weights from V2-P2.4)'}"
+
+    if args.output_dir is None:
+        args.output_dir = f"/content/tamil-voice-ai/checkpoints_v2_p2_5_{'a1' if is_random else 'a2'}"
+    if args.drive_dir is None:
+        args.drive_dir = f"/content/drive/MyDrive/tamil_voice_ai_checkpoints/v2_p2_5_{'a1' if is_random else 'a2'}"
+
     print("=" * 80)
-    print("STARTING EXPERIMENT V2-P2.5-A: SINGLE-CODEBOOK (CB0) BASELINE TRAINING")
+    print(f"STARTING EXPERIMENT {exp_name}")
     print("=" * 80)
+    print(f"Mode:                    {exp_code} ({'Random from scratch' if is_random else 'Transferred weights'})")
     print(f"Device:                  {args.device}")
     print(f"Max Steps:               {args.max_steps}")
     print(f"Effective Batch Size:    {args.micro_batch_size * args.grad_accum} (Micro={args.micro_batch_size}, Accum={args.grad_accum})")
     print(f"Learning Rate:           {args.lr} -> {args.min_lr} (Cosine with {args.warmup_steps} step warmup)")
-    print(f"Warm-Start Checkpoint:   {args.warm_start_checkpoint}")
+    if not is_random:
+        print(f"Warm-Start Checkpoint:   {args.warm_start_checkpoint}")
+    print(f"Output Directory:        {args.output_dir}")
+    print(f"Drive Backup Directory:  {args.drive_dir}")
 
     os.makedirs(args.output_dir, exist_ok=True)
     try:
@@ -170,12 +185,14 @@ def main():
 
     model_cfg = ModelConfig(d_model=1024, n_heads=16, n_layers=6, d_ff=4096, audio=audio_cfg)
 
-    # Warm-start trunk and CB0 head from V2-P2.4 best checkpoint
-    if os.path.exists(args.warm_start_checkpoint):
-        model = TextlessTamilSpeechLM_CB0.from_pretrained_multicodebook(args.warm_start_checkpoint, model_cfg).to(device)
-    else:
-        print(f"Notice: Checkpoint {args.warm_start_checkpoint} not found. Initializing from scratch.")
+    if is_random:
+        print(f"\nInitializing {exp_code}: Random parameter initialization (Normal/Xavier, seed={args.seed}).")
         model = TextlessTamilSpeechLM_CB0(model_cfg).to(device)
+    else:
+        print(f"\nInitializing {exp_code}: Transferring compatible weights from {args.warm_start_checkpoint}...")
+        if not os.path.exists(args.warm_start_checkpoint):
+            raise FileNotFoundError(f"Warm-start checkpoint not found: {args.warm_start_checkpoint}")
+        model = TextlessTamilSpeechLM_CB0.from_pretrained_multicodebook(args.warm_start_checkpoint, model_cfg).to(device)
 
     total_params = sum(p.numel() for p in model.parameters())
     trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
@@ -310,7 +327,9 @@ def main():
                     "optimizer_state_dict": optimizer.state_dict(),
                     "config": model_cfg,
                     "val_metrics": val_res,
-                    "experiment": "V2-P2.5-A"
+                    "experiment": exp_code,
+                    "init_mode": "random" if is_random else "transferred",
+                    "warm_start_checkpoint": None if is_random else args.warm_start_checkpoint
                 }
                 save_path = os.path.join(args.output_dir, f"tamil_speech_lm_cb0_step_{step}.pt")
                 torch.save(ckpt_data, save_path)
