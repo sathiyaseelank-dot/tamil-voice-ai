@@ -31,7 +31,8 @@ import torch.nn.functional as F
 from torch.utils.data import Dataset, DataLoader
 from datasets import load_dataset, Audio
 
-sys.path.insert(0, '/content/tamil-voice-ai')
+REPO_ROOT = '/content/tamil-voice-ai' if os.path.exists('/content/tamil-voice-ai') else os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, REPO_ROOT)
 from config import ModelConfig, AudioConfig
 from model.audio_transformer_cb0 import TextlessTamilSpeechLM_CB0
 from tokenizer.codec import AudioCodecTokenizer
@@ -42,9 +43,9 @@ def parse_args():
     parser.add_argument("--mode", type=str, choices=["a1", "a2", "random", "transferred"], default="a2",
                         help="Experiment mode: 'a1'/'random' (random initialization) or 'a2'/'transferred' (transferred weights from checkpoint)")
     parser.add_argument("--warm_start_checkpoint", type=str,
-                        default="/content/tamil-voice-ai/checkpoints_v2_p2_4/tamil_speech_lm_v2_p2_4_best.pt",
+                        default=os.path.join(REPO_ROOT, "checkpoints_v2_p2_4", "tamil_speech_lm_v2_p2_4_best.pt"),
                         help="Path to trained 4-codebook checkpoint to warm-start trunk and CB0 head (for mode a2)")
-    parser.add_argument("--val_tokens_path", type=str, default="/content/tamil-voice-ai/data/v2_p2_4/v2_p2_4_val_tokens.pt",
+    parser.add_argument("--val_tokens_path", type=str, default=os.path.join(REPO_ROOT, "data", "v2_p2_4", "v2_p2_4_val_tokens.pt"),
                         help="Path to pre-encoded full held-out validation tokens dataset")
     parser.add_argument("--output_dir", type=str, default=None,
                         help="Output checkpoint directory (defaults to checkpoints_v2_p2_5_a1 or a2)")
@@ -86,7 +87,7 @@ def load_validation_corpus(val_tokens_path: str, tokenizer: AudioCodecTokenizer,
     2. 10 fixed diagnostic audio recordings for standardized continuation synthesis and listening.
     """
     diag_samples = []
-    base_dir = '/content/tamil-voice-ai/experiments/v2_p1/wavs'
+    base_dir = os.path.join(REPO_ROOT, 'experiments', 'v2_p1', 'wavs')
     for i in range(1, 11):
         wav_path = os.path.join(base_dir, f'sample_{i:02d}_original.wav')
         if os.path.exists(wav_path):
@@ -221,7 +222,7 @@ def main():
     exp_name = f"V2-P2.5-{'A1 (Random Initialization)' if is_random else 'A2 (Transferred Weights from V2-P2.4)'}"
 
     if args.output_dir is None:
-        args.output_dir = f"/content/tamil-voice-ai/checkpoints_v2_p2_5_{'a1' if is_random else 'a2'}"
+        args.output_dir = os.path.join(REPO_ROOT, f"checkpoints_v2_p2_5_{'a1' if is_random else 'a2'}")
     if args.drive_dir is None:
         args.drive_dir = f"/content/drive/MyDrive/tamil_voice_ai_checkpoints/v2_p2_5_{'a1' if is_random else 'a2'}"
 

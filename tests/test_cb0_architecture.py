@@ -52,6 +52,8 @@ def test_backward_gradient_flow():
 def test_grafting_from_v2_p2_4():
     ckpt_path = '/content/tamil-voice-ai/checkpoints_v2_p2_4/tamil_speech_lm_v2_p2_4_best.pt'
     if not os.path.exists(ckpt_path):
+        ckpt_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'checkpoints_v2_p2_4', 'tamil_speech_lm_v2_p2_4_best.pt')
+    if not os.path.exists(ckpt_path):
         pytest.skip(f"Checkpoint not found: {ckpt_path}")
 
     model = TextlessTamilSpeechLM_CB0.from_pretrained_multicodebook(ckpt_path)
