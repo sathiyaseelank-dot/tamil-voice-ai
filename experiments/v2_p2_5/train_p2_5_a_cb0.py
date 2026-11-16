@@ -43,6 +43,8 @@ def parse_args():
     parser.add_argument("--warm_start_checkpoint", type=str,
                         default="/content/tamil-voice-ai/checkpoints_v2_p2_4/tamil_speech_lm_v2_p2_4_best.pt",
                         help="Path to trained 4-codebook checkpoint to warm-start trunk and CB0 head (for mode a2)")
+    parser.add_argument("--val_tokens_path", type=str, default="/content/tamil-voice-ai/data/v2_p2_4/v2_p2_4_val_tokens.pt",
+                        help="Path to pre-encoded full held-out validation tokens dataset")
     parser.add_argument("--output_dir", type=str, default=None,
                         help="Output checkpoint directory (defaults to checkpoints_v2_p2_5_a1 or a2)")
     parser.add_argument("--drive_dir", type=str, default=None,
@@ -76,9 +78,13 @@ def get_lr(step: int, warmup_steps: int, max_steps: int, min_lr: float, max_lr: 
     return min_lr + 0.5 * (max_lr - min_lr) * (1.0 + math.cos(math.pi * progress))
 
 
-def load_held_out_validation_samples(tokenizer: AudioCodecTokenizer, device: torch.device):
-    """Loads and pre-encodes the 10 reference held-out validation samples."""
-    samples = []
+def load_validation_corpus(val_tokens_path: str, tokenizer: AudioCodecTokenizer, device: torch.device):
+    """
+    Loads evaluation corpus:
+    1. Full held-out validation set (if available from pre-encoded tokens file).
+    2. 10 fixed diagnostic audio recordings for standardized continuation synthesis and listening.
+    """
+    diag_samples = []
     base_dir = '/content/tamil-voice-ai/experiments/v2_p1/wavs'
     for i in range(1, 11):
         wav_path = os.path.join(base_dir, f'sample_{i:02d}_original.wav')
@@ -86,27 +92,43 @@ def load_held_out_validation_samples(tokenizer: AudioCodecTokenizer, device: tor
             y, sr = sf.read(wav_path)
             w_t = torch.from_numpy(y).float().unsqueeze(0).unsqueeze(0).to(device)
             with torch.no_grad():
-                # Extract CB0 tokens: shape (1, T)
                 toks_4cb = tokenizer.encode(w_t, 24000)
-                toks_cb0 = toks_4cb[:, 0, :]  # (1, T)
-            samples.append({
+                toks_cb0 = toks_4cb[:, 0, :]
+            diag_samples.append({
                 "sample_id": f"sample_{i:02d}",
                 "tokens": toks_cb0,
                 "audio": y
             })
-    print(f"✓ Loaded {len(samples)} held-out reference evaluation audio recordings.")
-    return samples
+
+    full_val_samples = []
+    if val_tokens_path and os.path.exists(val_tokens_path):
+        raw_items = torch.load(val_tokens_path, weights_only=False)
+        print(f"✓ Loaded {len(raw_items)} recordings from full held-out validation dataset: {val_tokens_path}")
+        for item in raw_items:
+            toks = item['tokens']
+            if toks.ndim == 2 and toks.shape[0] == 4:
+                toks_cb0 = toks[0:1, :].to(device)
+            elif toks.ndim == 1:
+                toks_cb0 = toks.unsqueeze(0).to(device)
+            else:
+                toks_cb0 = toks.to(device)
+            full_val_samples.append({"tokens": toks_cb0.long()})
+    else:
+        full_val_samples = diag_samples
+
+    print(f"✓ Evaluation setup: {len(full_val_samples)} validation recordings ({len(diag_samples)} diagnostic audio references).")
+    return full_val_samples, diag_samples
 
 
-def evaluate_held_out(model: nn.Module, val_samples: list, tokenizer: AudioCodecTokenizer, device: torch.device, out_dir: str, step: int):
-    """Evaluates CB0 loss, accuracy, perplexity, and synthesizes 1-codebook audio."""
+def evaluate_held_out(model: nn.Module, full_val_samples: list, diag_samples: list, tokenizer: AudioCodecTokenizer, device: torch.device, out_dir: str, step: int):
+    """Evaluates CB0 loss, accuracy, perplexity across full validation set and synthesizes 1-codebook audio."""
     model.eval()
     losses = []
     accuracies = []
     entropies = []
 
     with torch.no_grad():
-        for s in val_samples:
+        for s in full_val_samples:
             toks = s['tokens']  # (1, T)
             bos = torch.tensor([[1025]], dtype=torch.long, device=device)
             toks_bos = torch.cat([bos, toks], dim=-1)
@@ -124,12 +146,12 @@ def evaluate_held_out(model: nn.Module, val_samples: list, tokenizer: AudioCodec
     mean_ent = float(np.mean(entropies)) if entropies else 0.0
     mean_ppl = float(math.exp(min(mean_loss, 20.0)))
 
-    # Synthesize sample 03 continuation
-    s3 = val_samples[2] if len(val_samples) > 2 else val_samples[0]
+    # Synthesize sample 03 continuation from diagnostic set
+    synth_samples = diag_samples if diag_samples else full_val_samples
+    s3 = synth_samples[2] if len(synth_samples) > 2 else synth_samples[0]
     prompt_75 = s3['tokens'][:, :75]
     with torch.no_grad():
         gen_tokens = model.generate(prompt_tokens=prompt_75, max_new_tokens=150, temperature=0.8, top_k=50, top_p=0.9)
-        # Decode using native 1-codebook RVQ path
         emb = tokenizer.model.quantizer.decode(gen_tokens)
         synth_wav = tokenizer.model.decoder(emb).squeeze().cpu().numpy()
 
@@ -141,6 +163,7 @@ def evaluate_held_out(model: nn.Module, val_samples: list, tokenizer: AudioCodec
         "val_accuracy_pct": mean_acc * 100.0,
         "val_perplexity": mean_ppl,
         "val_entropy": mean_ent,
+        "val_sequences_evaluated": len(full_val_samples),
         "synth_wav": wav_out
     }
 
@@ -207,13 +230,13 @@ def main():
         weight_decay=0.01
     )
 
-    # 3. Load Held-Out Validation Recordings
-    val_samples = load_held_out_validation_samples(tokenizer, device)
+    # 3. Load Validation Corpus (Full Held-Out Split + Diagnostic References)
+    full_val_samples, diag_samples = load_validation_corpus(args.val_tokens_path, tokenizer, device)
 
     # Initial Validation Baseline
     print("\nEvaluating initial zero-step validation metrics...")
-    init_metrics = evaluate_held_out(model, val_samples, tokenizer, device, args.output_dir, step=0)
-    print(f"  [Step 0 Baseline] Val Loss: {init_metrics['val_loss']:.4f} | CB0 Acc: {init_metrics['val_accuracy_pct']:.2f}% | PPL: {init_metrics['val_perplexity']:.1f}")
+    init_metrics = evaluate_held_out(model, full_val_samples, diag_samples, tokenizer, device, args.output_dir, step=0)
+    print(f"  [Step 0 Baseline] Val Loss: {init_metrics['val_loss']:.4f} | CB0 Acc: {init_metrics['val_accuracy_pct']:.2f}% | PPL: {init_metrics['val_perplexity']:.1f} (Evaluated on {init_metrics['val_sequences_evaluated']} sequences)")
 
     # 4. Data Pipeline Setup (Streaming IndicVoices-R_Tamil)
     print("\nConnecting to streaming Tamil training corpus...")
@@ -312,8 +335,8 @@ def main():
             # Periodic Held-Out Validation
             if step % args.eval_every == 0 or step == args.max_steps:
                 print(f"\n--- [Validation at Step {step}] ---")
-                val_res = evaluate_held_out(model, val_samples, tokenizer, device, args.output_dir, step)
-                print(f"  Val Loss: {val_res['val_loss']:.4f} | CB0 Acc: {val_res['val_accuracy_pct']:.2f}% | PPL: {val_res['val_perplexity']:.1f}")
+                val_res = evaluate_held_out(model, full_val_samples, diag_samples, tokenizer, device, args.output_dir, step)
+                print(f"  Val Loss: {val_res['val_loss']:.4f} | CB0 Acc: {val_res['val_accuracy_pct']:.2f}% | PPL: {val_res['val_perplexity']:.1f} ({val_res['val_sequences_evaluated']} sequences)")
                 print(f"  Synthesized audio: {val_res['synth_wav']}")
 
                 is_best = val_res['val_loss'] < best_val_loss
