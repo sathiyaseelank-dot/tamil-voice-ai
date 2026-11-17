@@ -9,6 +9,41 @@ import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from typing import Optional
+
+
+class SinusoidalPositionalEncoding(nn.Module):
+    """
+    Continuous Sinusoidal Positional Encoding for 75 Hz speech sequences.
+    Provides scale-invariant monotonic position information over arbitrary sequence lengths.
+    """
+    def __init__(self, d_model: int = 1024, max_len: int = 5000):
+        super().__init__()
+        pe = torch.zeros(max_len, d_model)
+        position = torch.arange(0, max_len, dtype=torch.float32).unsqueeze(1)
+        div_term = torch.exp(torch.arange(0, d_model, 2, dtype=torch.float32) * (-math.log(10000.0) / d_model))
+        pe[:, 0::2] = torch.sin(position * div_term)
+        pe[:, 1::2] = torch.cos(position * div_term)
+        pe = pe.unsqueeze(0)  # (1, max_len, d_model)
+        self.register_buffer('pe', pe)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        seq_len = x.size(1)
+        return x + self.pe[:, :seq_len, :].to(x.device)
+
+
+class LearnedPositionalEncoding(nn.Module):
+    """
+    Learned 1D Absolute Positional Embeddings for ablation benchmarking.
+    """
+    def __init__(self, d_model: int = 1024, max_len: int = 5000):
+        super().__init__()
+        self.pos_emb = nn.Embedding(max_len, d_model)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        seq_len = x.size(1)
+        positions = torch.arange(0, seq_len, dtype=torch.long, device=x.device)
+        return x + self.pos_emb(positions).unsqueeze(0)
 
 
 class TimestampAligner(nn.Module):
@@ -83,7 +118,7 @@ class DepthAudioHead(nn.Module):
             nn.Embedding(vocab_size, d_model) for _ in range(num_codebooks - 1)
         ])
 
-    def forward(self, h: torch.Tensor, target_tokens: torch.Tensor = None) -> torch.Tensor:
+    def forward(self, h: torch.Tensor, target_tokens: Optional[torch.Tensor] = None) -> torch.Tensor:
         """
         Args:
             h: (batch, seq_len, d_model)
@@ -128,15 +163,27 @@ class S2STokenPredictor(nn.Module):
         d_ff: int = 4096,
         num_codebooks: int = 4,
         vocab_size: int = 1029,
-        dropout: float = 0.1
+        dropout: float = 0.1,
+        pos_enc_type: str = "sinusoidal"  # "sinusoidal", "learned", "conv", "none"
     ):
         super().__init__()
         self.d_model = d_model
         self.num_codebooks = num_codebooks
         self.vocab_size = vocab_size
+        self.pos_enc_type = pos_enc_type
 
         # Continuous timestamp aligner
         self.aligner = TimestampAligner(d_in=1024, d_out=d_model)
+
+        # Positional Encoding Mechanism
+        if pos_enc_type == "sinusoidal":
+            self.pos_enc = SinusoidalPositionalEncoding(d_model=d_model)
+        elif pos_enc_type == "learned":
+            self.pos_enc = LearnedPositionalEncoding(d_model=d_model)
+        elif pos_enc_type in ["conv", "none"]:
+            self.pos_enc = nn.Identity()
+        else:
+            raise ValueError(f"Unknown pos_enc_type: {pos_enc_type}")
 
         # Transformer encoder layers
         encoder_layer = nn.TransformerEncoderLayer(
@@ -158,7 +205,7 @@ class S2STokenPredictor(nn.Module):
         self,
         h_mms: torch.Tensor,
         target_len: int,
-        target_tokens: torch.Tensor = None
+        target_tokens: Optional[torch.Tensor] = None
     ) -> torch.Tensor:
         """
         Args:
@@ -171,11 +218,14 @@ class S2STokenPredictor(nn.Module):
         # 1. Align MMS timeline (50 Hz) to Encodec timeline (75 Hz)
         h_aligned = self.aligner(h_mms, target_len=target_len)
 
-        # 2. Deep Transformer processing
-        h_trans = self.transformer(h_aligned)
+        # 2. Add Positional Information
+        h_pos = self.pos_enc(h_aligned)
+
+        # 3. Deep Transformer processing
+        h_trans = self.transformer(h_pos)
         h_norm = self.ln_f(h_trans)
 
-        # 3. Hierarchical codebook logits
+        # 4. Hierarchical codebook logits
         logits = self.head(h_norm, target_tokens=target_tokens)
         return logits
 
@@ -191,16 +241,17 @@ class S2STokenPredictor(nn.Module):
         Args:
             h_mms: (batch, T_mms, 1024)
             target_len: target Encodec frames
-            cb0_only: if True, returns tokens with residual codebooks zeroed out
+            cb0_only: if True, returns genuinely sliced 1-codebook tensor (batch, 1, target_len)
         Returns:
-            pred_tokens: (batch, num_codebooks, target_len)
+            pred_tokens: (batch, K, target_len) where K=1 if cb0_only else num_codebooks
         """
         self.eval()
         logits = self.forward(h_mms, target_len=target_len, target_tokens=None)
         pred_tokens = torch.argmax(logits, dim=-1)  # (batch, num_codebooks, target_len)
 
         if cb0_only:
-            # Zero out residual codebooks for high-fidelity formants
-            pred_tokens[:, 1:, :] = 0
+            # Genuine CB0-only codebook slicing (n_q = 1)
+            # NEVER substitute token 0 into residual codebooks!
+            return pred_tokens[:, :1, :]
 
         return pred_tokens

@@ -2,7 +2,8 @@
 """
 Experiment A: Dedicated CB0-Only Phonetic Backbone Learning.
 Focuses 100% loss concentration on Codebook 0 (the phonetic envelope).
-Codec remains strictly frozen.
+Codec remains strictly frozen. Supports explicit random initialization baseline
+and positional encoding configurations.
 """
 
 import os
@@ -20,7 +21,7 @@ sys.path.insert(0, REPO_ROOT)
 
 from model.s2s_transformer import S2STokenPredictor
 from s2s_v2.encodec_target_aligner import EncodecTargetAligner
-from s2s_v2.mms_feature_extractor import MMSFeatureExtractor
+from s2s_v2.checkpoint_manager import SafeCheckpointManager
 
 
 class ExperimentATrainer:
@@ -32,6 +33,7 @@ class ExperimentATrainer:
         model: S2STokenPredictor,
         aligner: EncodecTargetAligner,
         device: torch.device,
+        init_type: str = "random",  # "random" or "mms"
         lr: float = 2e-4,
         weight_decay: float = 0.01,
         save_dir: str = "checkpoints/exp_a"
@@ -39,7 +41,9 @@ class ExperimentATrainer:
         self.model = model.to(device)
         self.aligner = aligner
         self.device = device
+        self.init_type = init_type
         self.save_dir = save_dir
+        self.ckpt_manager = SafeCheckpointManager(experiment_id="a")
         os.makedirs(save_dir, exist_ok=True)
 
         # Loss weights strictly 1.0 for CB0, 0.0 for residuals
@@ -126,7 +130,11 @@ class ExperimentATrainer:
         }
 
 
-def build_exp_a_system(device: Optional[torch.device] = None) -> ExperimentATrainer:
+def build_exp_a_system(
+    init_type: str = "random",
+    pos_enc_type: str = "sinusoidal",
+    device: Optional[torch.device] = None
+) -> ExperimentATrainer:
     """Builds a configured Experiment A system."""
     dev = device or torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = S2STokenPredictor(
@@ -135,10 +143,11 @@ def build_exp_a_system(device: Optional[torch.device] = None) -> ExperimentATrai
         n_layers=6,
         d_ff=4096,
         num_codebooks=4,
-        vocab_size=1029
+        vocab_size=1029,
+        pos_enc_type=pos_enc_type
     )
     aligner = EncodecTargetAligner(device=dev)
-    trainer = ExperimentATrainer(model=model, aligner=aligner, device=dev)
+    trainer = ExperimentATrainer(model=model, aligner=aligner, device=dev, init_type=init_type)
     return trainer
 
 

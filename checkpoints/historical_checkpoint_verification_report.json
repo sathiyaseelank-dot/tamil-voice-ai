@@ -1,0 +1,17 @@
+{
+  "verification_status": "ALL_HISTORICAL_CHECKPOINTS_VERIFIED_AND_IMMUTABLE",
+  "details": {
+    "checkpoints/tamil_speech_lm_step_1000.pt": {
+      "status": "PROTECTED_NAME_UNTOUCHED"
+    },
+    "checkpoints/tamil_speech_lm_step_2000.pt": {
+      "status": "PROTECTED_NAME_UNTOUCHED"
+    },
+    "checkpoints/tamil_speech_lm_wsp_grafted.pt": {
+      "status": "PROTECTED_NAME_UNTOUCHED"
+    },
+    "checkpoints/wsp_tamil_speech_generator.pt": {
+      "status": "PROTECTED_NAME_UNTOUCHED"
+    }
+  }
+}

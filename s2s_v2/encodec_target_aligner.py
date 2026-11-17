@@ -2,6 +2,8 @@
 """
 Encodec Target Extraction, Continuous Timestamp Aligner, and Codebook Ablation Engine.
 Guarantees verified codebook slicing:
+- Preserves scale and chunk metadata for faithful reconstruction.
+- Keeps training token extraction separate from waveform reconstruction.
 - True CB0-only decoding slices token tensor to shape (batch, 1, seq_len).
 - Verifies that Encodec RVQ completely removes residual quantized vectors rather
   than looking up codevector index 0.
@@ -11,7 +13,7 @@ import os
 import torch
 import torch.nn as nn
 import torchaudio
-from typing import Optional, Tuple
+from typing import Optional, Tuple, List
 from encodec import EncodecModel
 from encodec.utils import convert_audio
 
@@ -40,7 +42,7 @@ class EncodecTargetAligner(nn.Module):
     @torch.no_grad()
     def extract_targets(self, wav: torch.Tensor, sample_rate: int = 24000) -> torch.Tensor:
         """
-        Extracts 4-codebook target tokens from audio.
+        Pure token extraction for training targets (independent of synthesis metadata).
         Args:
             wav: (batch, samples) or (batch, 1, samples)
             sample_rate: sampling rate of input audio
@@ -63,6 +65,33 @@ class EncodecTargetAligner(nn.Module):
         codes = torch.cat([frame[0] for frame in encoded_frames], dim=-1)  # (batch, 4, T)
         return codes[:, :4, :].long()
 
+    @torch.no_grad()
+    def encode_with_metadata(
+        self,
+        wav: torch.Tensor,
+        sample_rate: int = 24000
+    ) -> Tuple[torch.Tensor, List[Tuple[torch.Tensor, Optional[torch.Tensor]]]]:
+        """
+        Extracts tokens AND preserves full Encodec frame/chunk metadata (including scale).
+        Returns:
+            tokens: (batch, 4, T_codec)
+            encoded_frames: List of [(codes_chunk, scale_chunk)]
+        """
+        if wav.ndim == 2:
+            wav = wav.unsqueeze(1)
+        wav = wav.to(self.device)
+
+        if sample_rate != 24000:
+            wav = convert_audio(wav, sample_rate, 24000, self.codec.channels)
+
+        max_val = wav.abs().max()
+        if max_val > 0:
+            wav = (wav / max_val) * 0.95
+
+        encoded_frames = self.codec.encode(wav)
+        codes = torch.cat([frame[0] for frame in encoded_frames], dim=-1)
+        return codes[:, :4, :].long(), encoded_frames
+
     def align_features(self, h_mms: torch.Tensor, target_len: int) -> torch.Tensor:
         """
         Applies mathematical continuous coordinate mapping:
@@ -71,29 +100,49 @@ class EncodecTargetAligner(nn.Module):
         return self.aligner(h_mms, target_len)
 
     @torch.no_grad()
-    def decode_tokens(self, tokens: torch.Tensor, num_codebooks: int = 4) -> torch.Tensor:
+    def decode_tokens(
+        self,
+        tokens: torch.Tensor,
+        num_codebooks: int = 4,
+        scale: Optional[torch.Tensor] = None
+    ) -> torch.Tensor:
         """
-        Verified Encodec decoding supporting genuine RVQ depth truncation.
+        Verified Encodec decoding supporting genuine RVQ depth truncation and optional scale.
         Args:
             tokens: (batch, K, seq_len)
             num_codebooks: number of codebooks to genuinely decode (1, 2, 3, or 4)
+            scale: optional scale tensor from encoder metadata
         Returns:
             wav: (batch, 1, time_samples) at 24 kHz
         """
         tokens = tokens.to(self.device)
-        # Clamp to valid codebook vocabulary [0, 1023]
         clean_tokens = torch.clamp(tokens, 0, 1023)
 
-        # Truncate to desired depth
+        # Truncate genuinely to desired depth
         sliced_tokens = clean_tokens[:, :num_codebooks, :]
 
-        # Encodec decode takes frames: [(codes, scale)]
         # When sliced_tokens has shape (B, 1, T), Encodec's ResidualVectorQuantization
         # executes enumerate(q_indices) for exactly 1 iteration (layer 0).
-        # Residual codevectors from layers 1..3 are omitted completely.
-        frames = [(sliced_tokens, None)]
+        # Residual codevectors from layers 1..3 are genuinely omitted.
+        frames = [(sliced_tokens, scale)]
         waveform = self.codec.decode(frames)
         return waveform
+
+    @torch.no_grad()
+    def reconstruct_from_frames(
+        self,
+        encoded_frames: List[Tuple[torch.Tensor, Optional[torch.Tensor]]],
+        num_codebooks: int = 4
+    ) -> torch.Tensor:
+        """
+        Reconstructs waveform preserving original scale and chunk structure across frames.
+        """
+        truncated_frames = []
+        for codes, scale in encoded_frames:
+            codes_c = torch.clamp(codes[:, :num_codebooks, :], 0, 1023).to(self.device)
+            scale_c = scale.to(self.device) if scale is not None else None
+            truncated_frames.append((codes_c, scale_c))
+        return self.codec.decode(truncated_frames)
 
     @torch.no_grad()
     def verify_vector_ablation(self, tokens_4cb: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, float]:

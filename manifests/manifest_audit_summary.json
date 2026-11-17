@@ -1,26 +1,32 @@
 {
   "dataset_name": "SPRINGLab/IndicVoices-R_Tamil",
   "full_dataset_tier": {
-    "status": "VERIFIED_ON_DISK",
-    "manifest_file": "/content/tamil-voice-ai/data/v2_p2_4/v2_p2_4_manifest.json",
+    "status": "VERIFIED_FROM_MANIFEST_RECORD",
+    "manifest_path": "/content/tamil-voice-ai/data/v2_p2_4/v2_p2_4_manifest.json",
     "total_audio_hours": 20.73373992472797,
     "train_duration_hours": 18.968444282370275,
     "val_duration_hours": 1.7652956423577777,
-    "total_speakers": 407,
-    "train_speakers_count": 382,
-    "val_speakers_count": 25,
     "train_utterances_count": 7679,
     "val_utterances_count": 684,
-    "speaker_overlap": 0,
+    "total_utterances": 8363,
+    "train_speakers_count": 382,
+    "val_speakers_count": 25,
+    "total_speakers_count": 407,
     "mandatory_val_speakers": [
       "S4258098500393504",
       "S4259865400376309"
-    ]
+    ],
+    "is_strictly_disjoint": true,
+    "overlap_count": 0,
+    "dynamic_overlap_speakers": []
   },
   "local_benchmark_tier": {
-    "status": "VERIFIED",
-    "description": "Rapid local forensic validation split across 82 audio utterances",
+    "status": "VERIFIED_FROM_INVESTIGATION_RECORD",
+    "record_path": "/content/tamil-voice-ai/samples/s2s_v2_readiness/readiness_investigation_data.json",
+    "train_utterances_count": 50,
+    "val_utterances_count": 32,
     "train_speakers_count": 7,
+    "val_speakers_count": 3,
     "train_speakers": [
       "speaker_asst",
       "speaker_demo",
@@ -30,23 +36,14 @@
       "speaker_indic3",
       "speaker_wsp"
     ],
-    "train_utterances": 50,
-    "approx_train_duration_minutes": 2.5,
-    "val_speakers_count": 3,
     "val_speakers": [
       "speaker_indic4",
       "speaker_mms",
       "speaker_user"
     ],
-    "val_utterances": 32,
-    "val_utterances_breakdown": {
-      "speaker_user": 17,
-      "speaker_mms": 8,
-      "speaker_indic4": 7
-    },
-    "speaker_overlap_count": 0,
-    "speaker_overlap_names": [],
-    "is_strictly_disjoint": true
+    "is_strictly_disjoint": true,
+    "overlap_count": 0,
+    "dynamic_overlap_speakers": []
   },
   "reconciliation_summary": {
     "finding": "The 20.73 hours of Tamil speech belong to the full IndicVoices-R Tamil corpus comprising 407 unique speakers (382 train + 25 validation). The 7-training / 3-validation split represents the local 82-utterance forensic benchmark pool. The claim that the 7 training speakers held 20 hours is an audit nomenclature discrepancy now formally corrected and delineated into Tier 1 (407 speakers, 20.73h) and Tier 2 (10 speakers, 82 utterances).",

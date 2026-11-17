@@ -5,10 +5,12 @@ Separates evaluations into:
 - B1: Teacher-Forced Ceiling (Ground-truth CB0 conditioning + Ground-truth CB0 decoding + Predicted residuals)
 - B2: True Inference Condition (Predicted CB0 conditioning + Predicted CB0 decoding + Predicted residuals)
 - Diagnostic B3: Cross-condition sensitivity analysis
+Explicitly loads approved Experiment A checkpoint with provenance and SHA-256 validation.
 """
 
 import os
 import sys
+import hashlib
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -32,19 +34,25 @@ class ExperimentBTrainer:
         aligner: EncodecTargetAligner,
         device: torch.device,
         freeze_backbone_and_cb0: bool = True,
+        init_type: str = "checkpoint",  # "checkpoint" or "random"
         lr: float = 1e-4,
         save_dir: str = "checkpoints/exp_b"
     ):
         self.model = model.to(device)
         self.aligner = aligner
         self.device = device
+        self.init_type = init_type
         self.save_dir = save_dir
+        self.parent_checkpoint_info = None
         os.makedirs(save_dir, exist_ok=True)
 
         if freeze_backbone_and_cb0:
-            # Freeze transformer backbone and CB0 head
+            # Freeze transformer backbone, positional encoding, and CB0 head
             for p in self.model.aligner.parameters():
                 p.requires_grad = False
+            if hasattr(self.model, "pos_enc") and isinstance(self.model.pos_enc, nn.Module):
+                for p in self.model.pos_enc.parameters():
+                    p.requires_grad = False
             for p in self.model.transformer.parameters():
                 p.requires_grad = False
             for p in self.model.ln_f.parameters():
@@ -59,6 +67,35 @@ class ExperimentBTrainer:
 
         # Residual loss weights
         self.loss_weights = [0.0, 1.0, 0.5, 0.25]
+
+    def load_exp_a_checkpoint(self, checkpoint_path: str, verify_sha256: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Loads approved Experiment A checkpoint into backbone and CB0 head.
+        Verifies SHA-256 and records provenance.
+        """
+        assert os.path.exists(checkpoint_path), f"Experiment A checkpoint not found: {checkpoint_path}"
+
+        if verify_sha256:
+            h = hashlib.sha256()
+            with open(checkpoint_path, "rb") as f:
+                while chunk := f.read(65536):
+                    h.update(chunk)
+            actual_hash = h.hexdigest()
+            assert actual_hash == verify_sha256, (
+                f"SHA-256 mismatch for Exp A checkpoint {checkpoint_path}!\n"
+                f"Expected: {verify_sha256}\nActual:   {actual_hash}"
+            )
+
+        ckpt = torch.load(checkpoint_path, map_location=self.device, weights_only=False)
+        self.model.load_state_dict(ckpt["model_state_dict"], strict=False)
+
+        self.parent_checkpoint_info = {
+            "path": checkpoint_path,
+            "step": ckpt.get("step", 0),
+            "experiment_id": ckpt.get("experiment_id", "exp_a")
+        }
+        print(f"✓ Loaded approved Experiment A checkpoint from {checkpoint_path} (Provenance recorded)")
+        return ckpt
 
     def train_step(self, h_mms: torch.Tensor, tgt_tokens: torch.Tensor) -> Dict[str, float]:
         """
@@ -142,7 +179,6 @@ class ExperimentBTrainer:
         target_len = tgt_tokens.shape[-1]
 
         # In true inference, target_tokens=None.
-        # DepthAudioHead sequentially predicts CB0, embeds predicted CB0, predicts CB1, etc.
         logits = self.model(h_mms, target_len=target_len, target_tokens=None)
         pred_tokens_b2 = torch.argmax(logits, dim=-1)  # (B, 4, T)
 
@@ -166,7 +202,11 @@ class ExperimentBTrainer:
         }
 
 
-def build_exp_b_system(device: Optional[torch.device] = None) -> ExperimentBTrainer:
+def build_exp_b_system(
+    init_type: str = "checkpoint",
+    pos_enc_type: str = "sinusoidal",
+    device: Optional[torch.device] = None
+) -> ExperimentBTrainer:
     """Builds a configured Experiment B system."""
     dev = device or torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = S2STokenPredictor(
@@ -175,10 +215,16 @@ def build_exp_b_system(device: Optional[torch.device] = None) -> ExperimentBTrai
         n_layers=6,
         d_ff=4096,
         num_codebooks=4,
-        vocab_size=1029
+        vocab_size=1029,
+        pos_enc_type=pos_enc_type
     )
     aligner = EncodecTargetAligner(device=dev)
-    trainer = ExperimentBTrainer(model=model, aligner=aligner, device=dev)
+    trainer = ExperimentBTrainer(
+        model=model,
+        aligner=aligner,
+        device=dev,
+        init_type=init_type
+    )
     return trainer
 
 
