@@ -1,0 +1,62 @@
+[
+  {
+    "step": 0,
+    "val_loss": 7.138730764389038,
+    "val_accuracy_pct": 0.0,
+    "val_perplexity": 1259.828354891177,
+    "val_entropy": 5.992297967274983,
+    "val_sequences_evaluated": 6,
+    "ar_rms": 0.04058288410305977,
+    "ar_silence_pct": 23.960416666666667,
+    "ar_unique_tokens": 48,
+    "ar_repetition_rate_pct": 4.026845637583892,
+    "synth_wav": "checkpoints/wsp_finetuned/sample03_p2_5_a2_step_0.wav",
+    "uncond_wav": "checkpoints/wsp_finetuned/sample_uncond_p2_5_a2_step_0.wav",
+    "tf_wav": "checkpoints/wsp_finetuned/sample03_tf_p2_5_a2_step_0.wav"
+  },
+  {
+    "step": 50,
+    "val_loss": 5.146912336349487,
+    "val_accuracy_pct": 8.818842319544821,
+    "val_perplexity": 171.89990097887005,
+    "val_entropy": 5.0021928151448565,
+    "val_sequences_evaluated": 6,
+    "ar_rms": 0.007488262839615345,
+    "ar_silence_pct": 97.21041666666666,
+    "ar_unique_tokens": 6,
+    "ar_repetition_rate_pct": 94.63087248322147,
+    "synth_wav": "checkpoints/wsp_finetuned/sample03_p2_5_a2_step_50.wav",
+    "uncond_wav": "checkpoints/wsp_finetuned/sample_uncond_p2_5_a2_step_50.wav",
+    "tf_wav": "checkpoints/wsp_finetuned/sample03_tf_p2_5_a2_step_50.wav"
+  },
+  {
+    "step": 100,
+    "val_loss": 6.224975824356079,
+    "val_accuracy_pct": 0.0,
+    "val_perplexity": 505.2108285120943,
+    "val_entropy": 4.816572825113933,
+    "val_sequences_evaluated": 6,
+    "ar_rms": 0.0002072400675388053,
+    "ar_silence_pct": 100.0,
+    "ar_unique_tokens": 1,
+    "ar_repetition_rate_pct": 100.0,
+    "synth_wav": "checkpoints/wsp_finetuned/sample03_p2_5_a2_step_100.wav",
+    "uncond_wav": "checkpoints/wsp_finetuned/sample_uncond_p2_5_a2_step_100.wav",
+    "tf_wav": "checkpoints/wsp_finetuned/sample03_tf_p2_5_a2_step_100.wav"
+  },
+  {
+    "step": 150,
+    "val_loss": 5.638358990351359,
+    "val_accuracy_pct": 7.071048021211891,
+    "val_perplexity": 281.0012142085727,
+    "val_entropy": 5.079459508260091,
+    "val_sequences_evaluated": 6,
+    "ar_rms": 0.00024194075376726687,
+    "ar_silence_pct": 100.0,
+    "ar_unique_tokens": 4,
+    "ar_repetition_rate_pct": 97.98657718120806,
+    "synth_wav": "checkpoints/wsp_finetuned/sample03_p2_5_a2_step_150.wav",
+    "uncond_wav": "checkpoints/wsp_finetuned/sample_uncond_p2_5_a2_step_150.wav",
+    "tf_wav": "checkpoints/wsp_finetuned/sample03_tf_p2_5_a2_step_150.wav"
+  }
+]
