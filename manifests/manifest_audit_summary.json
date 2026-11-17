@@ -1,24 +1,25 @@
 {
   "dataset_name": "SPRINGLab/IndicVoices-R_Tamil",
   "full_dataset_tier": {
-    "status": "VERIFIED_FROM_MANIFEST_RECORD",
+    "status": "AUDIT_FAILED_MISSING_UNDERLYING_SPEAKER_RECORDS",
     "manifest_path": "/content/tamil-voice-ai/data/v2_p2_4/v2_p2_4_manifest.json",
     "total_audio_hours": 20.73373992472797,
     "train_duration_hours": 18.968444282370275,
     "val_duration_hours": 1.7652956423577777,
-    "train_utterances_count": 7679,
-    "val_utterances_count": 684,
-    "total_utterances": 8363,
-    "train_speakers_count": 382,
-    "val_speakers_count": 25,
-    "total_speakers_count": 407,
+    "claimed_train_utterances": 7679,
+    "claimed_val_utterances": 684,
+    "claimed_train_speakers": 382,
+    "claimed_val_speakers": 25,
     "mandatory_val_speakers": [
       "S4258098500393504",
       "S4259865400376309"
     ],
-    "is_strictly_disjoint": true,
-    "overlap_count": 0,
-    "dynamic_overlap_speakers": []
+    "has_full_speaker_lists": false,
+    "caches_exist_on_disk": false,
+    "is_strictly_disjoint": false,
+    "overlap_count": null,
+    "dynamic_overlap_speakers": [],
+    "audit_failure_reason": "Tier 1 manifest contains scalar summary statistics (382 train speakers, 25 val speakers, 20.73 hours) but lacks explicit complete per-speaker lists ('train_speakers_list', 'val_speakers_list') and the referenced token cache files (/content/tamil-voice-ai/data/v2_p2_4/v2_p2_4_train_tokens.pt, /content/tamil-voice-ai/data/v2_p2_4/v2_p2_4_val_tokens.pt) do not exist on disk. Per P0 requirements, calculating disjointness against an empty speaker list is rejected; audit fails."
   },
   "local_benchmark_tier": {
     "status": "VERIFIED_FROM_INVESTIGATION_RECORD",
@@ -46,7 +47,10 @@
     "dynamic_overlap_speakers": []
   },
   "reconciliation_summary": {
-    "finding": "The 20.73 hours of Tamil speech belong to the full IndicVoices-R Tamil corpus comprising 407 unique speakers (382 train + 25 validation). The 7-training / 3-validation split represents the local 82-utterance forensic benchmark pool. The claim that the 7 training speakers held 20 hours is an audit nomenclature discrepancy now formally corrected and delineated into Tier 1 (407 speakers, 20.73h) and Tier 2 (10 speakers, 82 utterances).",
-    "disjointness_guarantee": "Zero cross-split speaker overlap across both Tier 1 and Tier 2."
+    "tier1_audit_status": "AUDIT_FAILED_MISSING_UNDERLYING_SPEAKER_RECORDS",
+    "tier2_audit_status": "VERIFIED_FROM_INVESTIGATION_RECORD",
+    "finding": "The Tier 1 corpus represents 20.73 hours across 407 speakers (382 train + 25 validation). Because underlying per-utterance parquet records and token caches are not available locally on disk, Tier 1 audit is recorded as AUDIT_FAILED_MISSING_UNDERLYING_SPEAKER_RECORDS per strict audit policy. The Tier 2 local rapid benchmark pool (10 speakers: 7 train, 3 validation, 82 utterances) is verified with complete per-utterance speaker records and 0.00% cross-split overlap.",
+    "tier1_disjointness_verified": false,
+    "tier2_disjointness_verified": true
   }
 }

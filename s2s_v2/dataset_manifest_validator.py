@@ -3,7 +3,8 @@
 Dataset and Manifest Validator for S2S V2.
 Dynamically recomputes speaker-disjoint splits from actual manifest records,
 audits utterance counts and durations, and verifies zero cross-split leakage.
-Includes overlap injection test hooks.
+Strictly fails audit if underlying per-speaker records or cache files are missing.
+Includes deliberate overlap injection test hooks.
 """
 
 import os
@@ -32,18 +33,60 @@ def verify_split_disjointness(train_speakers: List[str], val_speakers: List[str]
 def audit_tier1_from_records(manifest_path: str) -> Dict[str, Any]:
     """
     Dynamically audits Tier 1 full-scale dataset from actual manifest file.
+    Per P0 protocol: If complete per-speaker lists or underlying token cache files
+    are missing from disk, this function MUST FAIL the audit rather than claiming zero overlap.
     """
     if not os.path.exists(manifest_path):
-        return {"status": "FILE_NOT_FOUND", "path": manifest_path}
+        return {
+            "status": "AUDIT_FAILED_FILE_NOT_FOUND",
+            "is_strictly_disjoint": False,
+            "manifest_path": manifest_path,
+            "error": "Manifest file not found on disk"
+        }
 
     with open(manifest_path, "r", encoding="utf-8") as f:
         meta = json.load(f)
 
-    # If explicit speaker lists exist in manifest, extract them; otherwise extract from items
     train_speakers = meta.get("train_speakers_list", [])
-    val_speakers = meta.get("val_speakers_list", meta.get("mandatory_val_speakers", []))
+    val_speakers = meta.get("val_speakers_list", [])
+    train_cache_path = meta.get("train_save_path", "")
+    val_cache_path = meta.get("val_save_path", "")
 
-    # Dynamic disjointness check
+    # Check if underlying token caches exist on disk
+    caches_exist = os.path.exists(train_cache_path) and os.path.exists(val_cache_path)
+
+    # Check if full speaker lists are present
+    has_full_speakers = (
+        len(train_speakers) >= meta.get("train_speakers_count", 382) and
+        len(val_speakers) >= meta.get("val_speakers_count", 25)
+    )
+
+    if not has_full_speakers or not caches_exist:
+        return {
+            "status": "AUDIT_FAILED_MISSING_UNDERLYING_SPEAKER_RECORDS",
+            "manifest_path": manifest_path,
+            "total_audio_hours": meta.get("total_audio_hours", 0.0),
+            "train_duration_hours": meta.get("train_duration_hours", 0.0),
+            "val_duration_hours": meta.get("val_duration_hours", 0.0),
+            "claimed_train_utterances": meta.get("train_items", 0),
+            "claimed_val_utterances": meta.get("val_items", 0),
+            "claimed_train_speakers": meta.get("train_speakers_count", 0),
+            "claimed_val_speakers": meta.get("val_speakers_count", 0),
+            "mandatory_val_speakers": meta.get("mandatory_val_speakers", []),
+            "has_full_speaker_lists": has_full_speakers,
+            "caches_exist_on_disk": caches_exist,
+            "is_strictly_disjoint": False,
+            "overlap_count": None,
+            "dynamic_overlap_speakers": [],
+            "audit_failure_reason": (
+                "Tier 1 manifest contains scalar summary statistics (382 train speakers, 25 val speakers, 20.73 hours) "
+                "but lacks explicit complete per-speaker lists ('train_speakers_list', 'val_speakers_list') and the "
+                f"referenced token cache files ({train_cache_path}, {val_cache_path}) do not exist on disk. "
+                "Per P0 requirements, calculating disjointness against an empty speaker list is rejected; audit fails."
+            )
+        }
+
+    # If full speaker lists exist, perform strict disjointness calculation
     is_disjoint, overlap = verify_split_disjointness(train_speakers, val_speakers)
 
     return {
@@ -55,12 +98,12 @@ def audit_tier1_from_records(manifest_path: str) -> Dict[str, Any]:
         "train_utterances_count": meta.get("train_items", 0),
         "val_utterances_count": meta.get("val_items", 0),
         "total_utterances": meta.get("train_items", 0) + meta.get("val_items", 0),
-        "train_speakers_count": meta.get("train_speakers_count", 0),
-        "val_speakers_count": meta.get("val_speakers_count", 0),
-        "total_speakers_count": meta.get("train_speakers_count", 0) + meta.get("val_speakers_count", 0),
+        "train_speakers_count": len(train_speakers),
+        "val_speakers_count": len(val_speakers),
+        "total_speakers_count": len(train_speakers) + len(val_speakers),
         "mandatory_val_speakers": meta.get("mandatory_val_speakers", []),
-        "is_strictly_disjoint": meta.get("speaker_overlap", 0) == 0 and len(overlap) == 0,
-        "overlap_count": meta.get("speaker_overlap", 0),
+        "is_strictly_disjoint": is_disjoint and len(overlap) == 0,
+        "overlap_count": len(overlap),
         "dynamic_overlap_speakers": list(overlap)
     }
 
@@ -70,7 +113,11 @@ def audit_tier2_from_records(readiness_data_path: str) -> Dict[str, Any]:
     Dynamically audits Tier 2 rapid forensic benchmark pool from actual investigation records.
     """
     if not os.path.exists(readiness_data_path):
-        return {"status": "FILE_NOT_FOUND", "path": readiness_data_path}
+        return {
+            "status": "AUDIT_FAILED_FILE_NOT_FOUND",
+            "is_strictly_disjoint": False,
+            "path": readiness_data_path
+        }
 
     with open(readiness_data_path, "r", encoding="utf-8") as f:
         data = json.load(f)
@@ -86,11 +133,11 @@ def audit_tier2_from_records(readiness_data_path: str) -> Dict[str, Any]:
         "record_path": readiness_data_path,
         "train_utterances_count": split_meta.get("n_train_utterances", 0),
         "val_utterances_count": split_meta.get("n_val_utterances", 0),
-        "train_speakers_count": split_meta.get("n_train_speakers", len(train_speakers)),
-        "val_speakers_count": split_meta.get("n_val_speakers", len(val_speakers)),
+        "train_speakers_count": len(train_speakers),
+        "val_speakers_count": len(val_speakers),
         "train_speakers": train_speakers,
         "val_speakers": val_speakers,
-        "is_strictly_disjoint": is_disjoint,
+        "is_strictly_disjoint": is_disjoint and len(overlap) == 0,
         "overlap_count": len(overlap),
         "dynamic_overlap_speakers": list(overlap)
     }
@@ -111,20 +158,22 @@ def audit_dataset_splits(
     tier1 = audit_tier1_from_records(v2_p2_4_manifest_path)
     tier2 = audit_tier2_from_records(readiness_data_path)
 
-    # Cross-tier verification
     report = {
         "dataset_name": "SPRINGLab/IndicVoices-R_Tamil",
         "full_dataset_tier": tier1,
         "local_benchmark_tier": tier2,
         "reconciliation_summary": {
+            "tier1_audit_status": tier1.get("status"),
+            "tier2_audit_status": tier2.get("status"),
             "finding": (
-                "The 20.73 hours of Tamil speech belong to the full IndicVoices-R Tamil corpus "
-                "comprising 407 unique speakers (382 train + 25 validation). The 7-training / "
-                "3-validation split represents the local 82-utterance forensic benchmark pool. "
-                "The claim that the 7 training speakers held 20 hours is an audit nomenclature discrepancy "
-                "now formally corrected and delineated into Tier 1 (407 speakers, 20.73h) and Tier 2 (10 speakers, 82 utterances)."
+                "The Tier 1 corpus represents 20.73 hours across 407 speakers (382 train + 25 validation). "
+                "Because underlying per-utterance parquet records and token caches are not available locally on disk, "
+                "Tier 1 audit is recorded as AUDIT_FAILED_MISSING_UNDERLYING_SPEAKER_RECORDS per strict audit policy. "
+                "The Tier 2 local rapid benchmark pool (10 speakers: 7 train, 3 validation, 82 utterances) is verified "
+                "with complete per-utterance speaker records and 0.00% cross-split overlap."
             ),
-            "disjointness_guarantee": "Zero cross-split speaker overlap across both Tier 1 and Tier 2."
+            "tier1_disjointness_verified": tier1.get("is_strictly_disjoint", False),
+            "tier2_disjointness_verified": tier2.get("is_strictly_disjoint", False)
         }
     }
     return report
@@ -148,6 +197,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     out_file = save_manifest_audit(args.output)
-    print(f"✓ Dynamic dataset manifest audit saved to: {out_file}")
+    print(f"✓ Saved dataset manifest audit to: {out_file}")
     with open(out_file, "r") as f:
-        print(f.read())
+        summary = json.load(f)
+    print(json.dumps(summary["reconciliation_summary"], indent=2))

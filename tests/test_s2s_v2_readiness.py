@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
 """
-Expanded Unit Test Suite for S2S V2 Readiness & Architectural Invariants.
+Comprehensive Unit Test Suite for S2S V2 Readiness & Architectural Invariants.
 Validates all P0 and P1 review findings:
-1. Temporal alignment mathematics and positional encoding.
-2. Codebook target shapes and value ranges.
-3. Actual manifest-based speaker disjointness and deliberate overlap injection detection.
-4. Experiment B training step and B1 (teacher-forced) vs B2 (inference condition) decoupling.
-5. Experiment C forward, exposure-gap evaluation, and gradient flow per protocol (C1, C2, C3, C4).
+1. Temporal alignment mathematics, positional encoding, and strict permutation equivariance breaking.
+2. Codebook target shapes and value ranges strictly in [0, 1023].
+3. Actual manifest-based dataset audit: Tier 1 failure assertion on missing records, Tier 2 verification, and deliberate overlap injection detection.
+4. Experiment B mandatory checkpoint initialization refusal and B1 (teacher-forced) vs B2 (inference condition) decoupling.
+5. Experiment C mandatory checkpoint initialization refusal, forward step, exposure-gap evaluation, gradient flow, and deterministic frozen backbone.
 6. Genuine CB0-only quantized-vector ablation vs token-zero pseudo-ablation.
 7. Encodec scale and chunk metadata preservation.
-8. Human listening unblinding key isolation, random identifiers, and incomplete ratings agreement.
+8. Human listening unblinding key isolation (returns List[str], key isolated in secure_admin), random identifiers, and incomplete ratings agreement.
 9. Checkpoint path containment, symlink/traversal rejection, and historical checkpoint SHA-256 immutability.
-10. Strict textless inference invariants.
+10. Strict textless inference invariants with vocab_size=1024.
 """
 
 import os
@@ -35,6 +35,8 @@ from model.s2s_transformer import (
 from s2s_v2.encodec_target_aligner import EncodecTargetAligner
 from s2s_v2.dataset_manifest_validator import (
     audit_dataset_splits,
+    audit_tier1_from_records,
+    audit_tier2_from_records,
     verify_split_disjointness
 )
 from s2s_v2.checkpoint_manager import (
@@ -57,38 +59,87 @@ def verify_historical_hashes_fixture():
 
 
 def test_temporal_alignment_and_positional_encoding():
-    """Validates alignment mapping and verifies positional encoding breaks permutation equivariance."""
+    """
+    Validates alignment mapping and proves positional encoding breaks permutation equivariance.
+    Without positional encoding: Model(pi(x)) == pi(Model(x)) (permutation equivariant).
+    With positional encoding:    Model(pi(x)) != pi(Model(x)) (breaks equivariance).
+    """
     aligner = TimestampAligner(d_in=1024, d_out=1024)
     aligner.eval()
 
-    B, T_mms, D = 2, 100, 1024  # 100 frames @ 50 Hz = 2.0s
-    target_len = 150            # 150 frames @ 75 Hz = 2.0s
+    B, T_mms, D = 1, 40, 1024  # 40 frames @ 50 Hz = 0.8s
+    target_len = 60            # 60 frames @ 75 Hz = 0.8s
     h_mms = torch.randn(B, T_mms, D)
 
     h_aligned = aligner(h_mms, target_len=target_len)
     assert h_aligned.shape == (B, target_len, D)
 
-    # Test Sinusoidal Positional Encoding
-    pos_enc = SinusoidalPositionalEncoding(d_model=1024)
-    h_pos = pos_enc(h_aligned)
-    assert h_pos.shape == (B, target_len, D)
+    # Fixed permutation pi
+    perm = torch.randperm(target_len)
+    inv_perm = torch.empty_like(perm)
+    inv_perm[perm] = torch.arange(target_len)
 
-    # Verify positional encoding breaks permutation equivariance
-    # If we permute frames along time, adding positional encoding to permuted tensor
-    # must differ from permuting the position-encoded tensor
-    h_perm = h_aligned[:, torch.randperm(target_len), :]
-    h_pos_perm = pos_enc(h_perm)
-    perm_h_pos = h_pos[:, torch.randperm(target_len), :]
-    assert not torch.allclose(h_pos_perm, perm_h_pos)
+    # 1. Test model WITHOUT positional encoding (transformer is strictly permutation equivariant)
+    model_no_pe = S2STokenPredictor(
+        d_model=64, n_heads=2, n_layers=2, d_ff=128,
+        num_codebooks=1, vocab_size=1024, pos_enc_type="none"
+    )
+    model_no_pe.eval()
 
-    # Test Learned Positional Encoding
+    with torch.no_grad():
+        # Evaluate standard
+        h_aligned = model_no_pe.aligner(h_mms, target_len=target_len)
+        h_trans = model_no_pe.transformer(h_aligned)
+        h_norm = model_no_pe.ln_f(h_trans)
+        logits_std = model_no_pe.head(h_norm)
+
+        # Permute input aligned representation
+        h_aligned_perm = h_aligned[:, perm, :]
+        h_trans_perm = model_no_pe.transformer(h_aligned_perm)
+        h_norm_perm = model_no_pe.ln_f(h_trans_perm)
+        logits_from_perm = model_no_pe.head(h_norm_perm)
+
+        # Verify permutation equivariance: logits_from_perm == logits_std[:, :, perm, :]
+        logits_std_perm = logits_std[:, :, perm, :]
+        assert torch.allclose(logits_from_perm, logits_std_perm, atol=1e-5), (
+            "Model without positional encoding failed permutation equivariance!"
+        )
+
+    # 2. Test model WITH sinusoidal positional encoding (equivariance broken)
+    model_with_pe = S2STokenPredictor(
+        d_model=64, n_heads=2, n_layers=2, d_ff=128,
+        num_codebooks=1, vocab_size=1024, pos_enc_type="sinusoidal"
+    )
+    model_with_pe.eval()
+
+    with torch.no_grad():
+        h_aligned = model_with_pe.aligner(h_mms, target_len=target_len)
+        h_pos = model_with_pe.pos_enc(h_aligned)
+        h_trans = model_with_pe.transformer(h_pos)
+        h_norm = model_with_pe.ln_f(h_trans)
+        logits_std = model_with_pe.head(h_norm)
+
+        # Permute frames before positional encoding
+        h_aligned_perm = h_aligned[:, perm, :]
+        h_pos_perm = model_with_pe.pos_enc(h_aligned_perm)
+        h_trans_perm = model_with_pe.transformer(h_pos_perm)
+        h_norm_perm = model_with_pe.ln_f(h_trans_perm)
+        logits_from_perm = model_with_pe.head(h_norm_perm)
+
+        logits_std_perm = logits_std[:, :, perm, :]
+        # Equivariance MUST be broken because position 0 received pos_enc(0), not pos_enc(perm[0])
+        diff = torch.norm(logits_from_perm - logits_std_perm).item()
+        assert diff > 1e-2, f"Positional encoding failed to break permutation equivariance! Diff: {diff}"
+
+    # 3. Test Learned Positional Encoding
     learned_pe = LearnedPositionalEncoding(d_model=1024)
-    h_learned = learned_pe(h_aligned)
-    assert h_learned.shape == (B, target_len, D)
+    h_aligned_1024 = aligner(h_mms, target_len=target_len)
+    h_learned = learned_pe(h_aligned_1024)
+    assert h_learned.shape == (B, target_len, 1024)
 
 
 def test_codebook_target_shapes_and_ranges():
-    """Validates Encodec RVQ token extraction bounds."""
+    """Validates Encodec RVQ token extraction bounds strictly in [0, 1023]."""
     aligner = EncodecTargetAligner(device=torch.device("cpu"))
     dummy_wav = torch.randn(1, 48000)  # 2.0 seconds @ 24 kHz
 
@@ -100,22 +151,28 @@ def test_codebook_target_shapes_and_ranges():
     assert tokens.max().item() < 1024
 
 
-def test_speaker_disjoint_split_integrity():
-    """Validates 0.00% speaker overlap across both Tier 1 and Tier 2 from manifest records."""
+def test_dataset_manifest_audit_reconciliation():
+    """
+    Validates:
+    - Tier 1 fails audit due to missing explicit per-speaker records on disk.
+    - Tier 2 passes verification with 0.00% cross-split overlap across 10 speakers.
+    """
     audit = audit_dataset_splits()
 
     # Tier 1
     tier1 = audit["full_dataset_tier"]
-    if tier1.get("status") == "VERIFIED_FROM_MANIFEST_RECORD":
-        assert tier1["is_strictly_disjoint"] is True
-        assert tier1["overlap_count"] == 0
-        assert len(tier1["dynamic_overlap_speakers"]) == 0
+    assert tier1["status"] == "AUDIT_FAILED_MISSING_UNDERLYING_SPEAKER_RECORDS"
+    assert tier1["is_strictly_disjoint"] is False
+    assert "Per P0 requirements" in tier1["audit_failure_reason"]
 
     # Tier 2
     tier2 = audit["local_benchmark_tier"]
+    assert tier2["status"] == "VERIFIED_FROM_INVESTIGATION_RECORD"
     assert tier2["is_strictly_disjoint"] is True
     assert tier2["overlap_count"] == 0
     assert len(tier2["dynamic_overlap_speakers"]) == 0
+    assert len(tier2["train_speakers"]) == 7
+    assert len(tier2["val_speakers"]) == 3
 
 
 def test_deliberate_overlap_injection_failure():
@@ -128,9 +185,33 @@ def test_deliberate_overlap_injection_failure():
     assert overlap == {"speaker_A"}, f"Expected overlap {'speaker_A'}, got {overlap}"
 
 
+def test_mandatory_checkpoint_initialization_refusal():
+    """
+    P0 MANDATORY INITIALIZATION TEST:
+    Asserts Experiment B and C refuse train_step when init_type='checkpoint'
+    and no approved checkpoint has been verified and loaded.
+    """
+    B, T_mms, D = 1, 40, 1024
+    T_codec = 60
+    h_mms = torch.randn(B, T_mms, D)
+    tgt_tokens = torch.randint(0, 1024, (B, 4, T_codec))
+
+    # Experiment B refusal
+    trainer_b = build_exp_b_system(init_type="checkpoint", device=torch.device("cpu"))
+    with pytest.raises(RuntimeError) as exc_b:
+        trainer_b.train_step(h_mms, tgt_tokens)
+    assert "MANDATORY INITIALIZATION FAILURE" in str(exc_b.value)
+
+    # Experiment C refusal
+    trainer_c = build_exp_c_system(protocol="C2", init_type="checkpoint", device=torch.device("cpu"))
+    with pytest.raises(RuntimeError) as exc_c:
+        trainer_c.train_step(h_mms, tgt_tokens, step=1)
+    assert "MANDATORY INITIALIZATION FAILURE" in str(exc_c.value)
+
+
 def test_actual_experiment_b_step_and_eval():
     """Tests Experiment B training step and proves B1 and B2 evaluation decouple properly."""
-    trainer = build_exp_b_system(device=torch.device("cpu"))
+    trainer = build_exp_b_system(init_type="random", device=torch.device("cpu"))
 
     B, T_mms, D = 1, 40, 1024
     T_codec = 60
@@ -162,7 +243,7 @@ def test_actual_experiment_b_step_and_eval():
 def test_experiment_c_forward_and_exposure_gap():
     """Verifies all 4 protocols of Experiment C and tests measure_exposure_gap."""
     for proto in ["C1", "C2", "C3", "C4"]:
-        trainer = build_exp_c_system(protocol=proto, device=torch.device("cpu"))
+        trainer = build_exp_c_system(protocol=proto, init_type="random", device=torch.device("cpu"))
         B, T_mms, D = 1, 30, 1024
         T_codec = 45
         h_mms = torch.randn(B, T_mms, D)
@@ -179,15 +260,14 @@ def test_experiment_c_forward_and_exposure_gap():
         assert "acc_residuals_free_run_inference" in gap_metrics
 
 
-def test_experiment_c_gradient_flows_and_parameter_freezing():
+def test_experiment_c_gradient_flows_and_deterministic_backbone():
     """
-    Verifies parameter freezing and gradient flow assertions for Experiment C:
-    - C1, C2, C3: Backbone and CB0 head must be frozen (requires_grad = False, grad is None)
-    - C3: Soft-embedding differentiable gradient flows into depth embeddings
-    - C4: All parameters are trainable and receive gradients
+    Verifies parameter freezing, gradient flow, and deterministic backbone eval mode:
+    - C2: Backbone and CB0 head must be frozen (requires_grad = False, grad is None)
+    - C2: Even in training step, backbone in eval() mode produces zero dropout variance.
+    - C4: Full model receives gradients.
     """
-    # Test C2 (Frozen backbone)
-    trainer_c2 = build_exp_c_system(protocol="C2", device=torch.device("cpu"))
+    trainer_c2 = build_exp_c_system(protocol="C2", init_type="random", device=torch.device("cpu"))
     h = torch.randn(1, 30, 1024)
     tokens = torch.randint(0, 1024, (1, 4, 45))
     trainer_c2.train_step(h, tokens, step=10)
@@ -205,8 +285,14 @@ def test_experiment_c_gradient_flows_and_parameter_freezing():
     # Check residual head received gradient
     assert trainer_c2.model.head.heads[1].weight.grad is not None
 
+    # Check deterministic backbone representation (eval mode disables dropout)
+    h_aligned = trainer_c2.model.aligner(h, target_len=45)
+    out1 = trainer_c2.model.transformer(h_aligned)
+    out2 = trainer_c2.model.transformer(h_aligned)
+    assert torch.allclose(out1, out2), "Backbone in eval() mode had non-zero dropout variance!"
+
     # Test C4 (Joint fine-tuning)
-    trainer_c4 = build_exp_c_system(protocol="C4", device=torch.device("cpu"))
+    trainer_c4 = build_exp_c_system(protocol="C4", init_type="random", device=torch.device("cpu"))
     trainer_c4.train_step(h, tokens, step=10)
 
     # All parameters must receive gradient in C4
@@ -231,7 +317,7 @@ def test_cb0_only_quantized_vector_ablation():
     assert l2_diff > 1.0, f"Token ID 0 substitution acted as non-zero codevectors! L2={l2_diff}"
 
     # Also verify model.generate_tokens with cb0_only=True returns shape (B, 1, T)
-    model = S2STokenPredictor(d_model=128, n_heads=4, n_layers=2, d_ff=256, num_codebooks=4, vocab_size=1029)
+    model = S2STokenPredictor(d_model=128, n_heads=4, n_layers=2, d_ff=256, num_codebooks=4, vocab_size=1024)
     dummy_mms = torch.randn(1, 30, 1024)
     gen_cb0 = model.generate_tokens(dummy_mms, target_len=45, cb0_only=True)
     assert gen_cb0.shape == (1, 1, 45), f"Expected shape (1, 1, 45), got {gen_cb0.shape}"
@@ -256,9 +342,10 @@ def test_human_evaluation_isolation_and_matching(tmp_path):
     """
     Verifies:
     1. Unblinding key is isolated in secure_admin directory.
-    2. Secure random 16-hex tokens are used.
-    3. Per-utterance ground truth mapping is preserved.
-    4. Agreement metrics work even with missing/incomplete listener ratings.
+    2. prepare_blinded_samples returns List[str] of filenames, NOT metadata dict.
+    3. Secure random 16-hex tokens are used.
+    4. Per-utterance ground truth mapping is preserved.
+    5. Agreement metrics work even with missing/incomplete listener ratings.
     """
     session = HumanListeningSession(session_dir=str(tmp_path))
 
@@ -279,12 +366,20 @@ def test_human_evaluation_isolation_and_matching(tmp_path):
         }
     ]
 
-    key = session.prepare_blinded_samples(records)
+    blinded_filenames = session.prepare_blinded_samples(records)
 
-    # Verify unblinding key is in secure_admin, not in listener_portal
+    # 1. Returns strictly list of filenames
+    assert isinstance(blinded_filenames, list)
+    assert all(isinstance(f, str) for f in blinded_filenames)
+
+    # 2. Verify unblinding key is strictly in secure_admin, not in listener_portal
     assert os.path.exists(session.key_path)
     assert "secure_admin" in session.key_path
     assert not os.path.exists(os.path.join(session.listener_portal, "unblinding_key.json"))
+
+    # Load unblinding key from secure admin to verify contents
+    with open(session.key_path, "r", encoding="utf-8") as f:
+        key = json.load(f)
 
     # Verify secure token format (eval_<16 hex chars>.wav)
     for b_name in key:
@@ -304,6 +399,9 @@ def test_human_evaluation_isolation_and_matching(tmp_path):
     assert "per_model_summary" in results
     assert "agreement_metrics" in results
     assert "mean_pairwise_agreement" in results["agreement_metrics"]
+    assert results["agreement_metrics"]["agreement_statistic_used"] in [
+        "Fleiss_Kappa", "Krippendorff_Alpha_Pairwise_Agreement"
+    ]
 
 
 def test_checkpoint_path_containment_and_safety(tmp_path):
@@ -313,7 +411,7 @@ def test_checkpoint_path_containment_and_safety(tmp_path):
     - Strictly rejects symlink escaping
     - Asserts immutability of protected historical checkpoints
     """
-    model = S2STokenPredictor(d_model=128, n_heads=4, n_layers=2, d_ff=256, num_codebooks=4, vocab_size=1029)
+    model = S2STokenPredictor(d_model=128, n_heads=4, n_layers=2, d_ff=256, num_codebooks=4, vocab_size=1024)
     optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3)
 
     mgr = SafeCheckpointManager(experiment_id="safe_test")
@@ -344,9 +442,10 @@ def test_checkpoint_path_containment_and_safety(tmp_path):
 def test_textless_inference_invariants():
     """
     STRICT TEXTLESS INVARIANT VALIDATION:
-    Asserts model takes zero text or phonemes and contains zero text encoders or vocabularies.
+    Asserts model takes zero text or phonemes, contains zero text encoders or vocabularies,
+    and has vocab_size=1024 strictly matching Encodec codebooks.
     """
-    model = S2STokenPredictor(d_model=1024, n_heads=16, n_layers=6, d_ff=4096, num_codebooks=4, vocab_size=1029)
+    model = S2STokenPredictor(d_model=1024, n_heads=16, n_layers=6, d_ff=4096, num_codebooks=4, vocab_size=1024)
 
     for name, _ in model.named_parameters():
         for forbidden in ["text", "phoneme", "bpe", "char", "vocab_embed", "transcription"]:
@@ -354,4 +453,5 @@ def test_textless_inference_invariants():
 
     dummy_mms = torch.randn(1, 50, 1024)
     logits = model(dummy_mms, target_len=75)
-    assert logits.shape == (1, 4, 75, 1029)
+    # Strict shape check: vocab_size is 1024 (0-1023 Encodec indices)
+    assert logits.shape == (1, 4, 75, 1024)

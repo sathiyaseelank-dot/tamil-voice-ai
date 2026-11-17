@@ -35,7 +35,7 @@ class ScheduledSamplingDepthHead(nn.Module):
         base_head,
         d_model: int = 1024,
         num_codebooks: int = 4,
-        vocab_size: int = 1029,
+        vocab_size: int = 1024,
         protocol: str = "C2"
     ):
         super().__init__()
@@ -173,6 +173,7 @@ class ExperimentCTrainer:
         self.temp_min = temp_min
         self.save_dir = save_dir
         self.parent_checkpoint_info = None
+        self.is_checkpoint_loaded = (init_type == "random")
         os.makedirs(save_dir, exist_ok=True)
 
         # Wrap head with scheduled sampling capabilities
@@ -223,35 +224,45 @@ class ExperimentCTrainer:
         trainable_params = [p for p in self.model.parameters() if p.requires_grad]
         self.optimizer = torch.optim.AdamW(trainable_params, lr=lr, betas=(0.9, 0.98), weight_decay=0.01)
 
-    def load_preceding_checkpoint(self, checkpoint_path: str, verify_sha256: Optional[str] = None) -> Dict[str, Any]:
+    def load_preceding_checkpoint(self, checkpoint_path: str, verify_sha256: str) -> Dict[str, Any]:
         """
-        Loads preceding checkpoint (from Exp A or Exp B), verifying existence and SHA-256.
-        Records provenance for traceability.
+        Loads preceding checkpoint (from Exp A or Exp B).
+        Requires mandatory SHA-256 validation and state_dict compatibility checks.
         """
         assert os.path.exists(checkpoint_path), f"Preceding checkpoint not found: {checkpoint_path}"
+        assert verify_sha256 is not None and len(verify_sha256) == 64, (
+            f"Mandatory SHA-256 hash required (expected 64-char hex string, got '{verify_sha256}')"
+        )
 
-        # Hash verification if provided
-        if verify_sha256:
-            h = hashlib.sha256()
-            with open(checkpoint_path, "rb") as f:
-                while chunk := f.read(65536):
-                    h.update(chunk)
-            actual_hash = h.hexdigest()
-            assert actual_hash == verify_sha256, (
-                f"SHA-256 mismatch for preceding checkpoint {checkpoint_path}!\n"
-                f"Expected: {verify_sha256}\nActual:   {actual_hash}"
-            )
+        h = hashlib.sha256()
+        with open(checkpoint_path, "rb") as f:
+            while chunk := f.read(65536):
+                h.update(chunk)
+        actual_hash = h.hexdigest()
+        assert actual_hash == verify_sha256, (
+            f"MANDATORY SHA-256 MISMATCH for preceding checkpoint {checkpoint_path}!\n"
+            f"Expected: {verify_sha256}\nActual:   {actual_hash}"
+        )
 
         ckpt = torch.load(checkpoint_path, map_location=self.device, weights_only=False)
-        self.model.load_state_dict(ckpt["model_state_dict"], strict=False)
+        missing, unexpected = self.model.load_state_dict(ckpt["model_state_dict"], strict=False)
 
-        # Record provenance
+        # Validate that no backbone keys are missing
+        backbone_keys = [k for k in self.model.state_dict().keys() if not any(x in k for x in ["head.heads.1", "head.heads.2", "head.heads.3", "head.depth_embeddings"])]
+        missing_backbone = [k for k in missing if k in backbone_keys]
+        if missing_backbone:
+            raise ValueError(f"Checkpoint compatibility failure: Missing required backbone keys: {missing_backbone}")
+        if len(unexpected) > 0:
+            raise ValueError(f"Checkpoint compatibility failure: Unexpected keys in checkpoint: {unexpected}")
+
         self.parent_checkpoint_info = {
             "path": checkpoint_path,
+            "sha256": actual_hash,
             "step": ckpt.get("step", 0),
-            "experiment_id": ckpt.get("experiment_id", "unknown")
+            "experiment_id": ckpt.get("experiment_id", "preceding_experiment")
         }
-        print(f"✓ Loaded preceding checkpoint from {checkpoint_path} (Provenance recorded)")
+        self.is_checkpoint_loaded = True
+        print(f"✓ Loaded preceding checkpoint from {checkpoint_path} (SHA-256 & Provenance verified)")
         return ckpt
 
     def get_scheduled_p(self, step: int) -> float:
@@ -265,8 +276,31 @@ class ExperimentCTrainer:
     def train_step(self, h_mms: torch.Tensor, tgt_tokens: torch.Tensor, step: int) -> Dict[str, float]:
         """
         Executes one training step according to selected protocol.
+        Refuses training when init_type='checkpoint' until approved checkpoint is loaded.
+        Enforces deterministic evaluation mode for frozen backbone in C1-C3.
         """
-        self.model.train()
+        if self.init_type == "checkpoint" and not self.is_checkpoint_loaded:
+            raise RuntimeError(
+                f"MANDATORY INITIALIZATION FAILURE: Experiment C ({self.protocol}) requires an approved preceding checkpoint before training. "
+                "Call load_preceding_checkpoint(checkpoint_path, verify_sha256) first."
+            )
+
+        if self.protocol in ["C1", "C2", "C3"]:
+            # Frozen backbone in eval mode (no dropout, deterministic features)
+            self.model.aligner.eval()
+            if hasattr(self.model, "pos_enc") and isinstance(self.model.pos_enc, nn.Module):
+                self.model.pos_enc.eval()
+            self.model.transformer.eval()
+            self.model.ln_f.eval()
+            self.model.head.heads[0].eval()
+            # Residual heads in train mode
+            for k in range(1, self.model.num_codebooks):
+                self.model.head.heads[k].train()
+                self.model.head.depth_embeddings[k - 1].train()
+        else:
+            # C4 Joint fine-tuning: full model in train mode
+            self.model.train()
+
         self.optimizer.zero_grad()
         target_len = tgt_tokens.shape[-1]
 
@@ -347,7 +381,7 @@ def build_exp_c_system(
         n_layers=6,
         d_ff=4096,
         num_codebooks=4,
-        vocab_size=1029,
+        vocab_size=1024,
         pos_enc_type=pos_enc_type
     )
     aligner = EncodecTargetAligner(device=dev)

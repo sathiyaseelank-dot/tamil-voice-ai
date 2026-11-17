@@ -143,7 +143,7 @@ def build_exp_a_system(
         n_layers=6,
         d_ff=4096,
         num_codebooks=4,
-        vocab_size=1029,
+        vocab_size=1024,
         pos_enc_type=pos_enc_type
     )
     aligner = EncodecTargetAligner(device=dev)

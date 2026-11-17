@@ -47,10 +47,12 @@ class HumanListeningSession:
         self,
         sample_records: List[Dict[str, Any]],
         sr: int = 24000
-    ) -> Dict[str, Any]:
+    ) -> List[str]:
         """
         Takes raw audio samples with reference metadata, normalizes amplitude to -20 dBFS,
         assigns cryptographically secure random tokens, and isolates unblinding key.
+        STRICT ISOLATION: Returns only blinded sample identifiers to listener workflows.
+        The unblinding key is written exclusively to the secure admin directory.
         Args:
             sample_records: List of dicts with:
                 - "model_id": str (e.g. "exp_a_cb0", "gt_codec", "random_init")
@@ -58,6 +60,8 @@ class HumanListeningSession:
                 - "audio": np.ndarray
                 - "ref_text": Optional[str]
                 - "ref_audio_path": Optional[str]
+        Returns:
+            blinded_list: List of blinded filenames for listener presentation
         """
         unblinding_key = {}
         blinded_list = []
@@ -103,8 +107,8 @@ class HumanListeningSession:
             json.dump(unblinding_key, f, indent=2)
 
         print(f"✓ Prepared {len(blinded_list)} blinded samples in listener portal: {self.audio_dir}")
-        print(f"✓ Isolated unblinding key securely stored in: {self.key_path}")
-        return unblinding_key
+        print(f"✓ Isolated unblinding key securely stored in administrator storage: {self.key_path}")
+        return blinded_list
 
     def record_response(
         self,
@@ -239,7 +243,13 @@ class HumanListeningSession:
                 if 1 - P_bar_e != 0:
                     fleiss_kappa = float((P_bar - P_bar_e) / (1 - P_bar_e))
 
+        # Determine if ratings are complete across items
+        listener_counts = [len(r_dict) for r_dict in items]
+        all_equal = len(set(listener_counts)) <= 1 if listener_counts else True
+        statistic_used = "Fleiss_Kappa" if (all_equal and items_matrix and len(items_matrix) == len(items)) else "Krippendorff_Alpha_Pairwise_Agreement"
+
         return {
             "mean_pairwise_agreement": mean_pairwise_agreement,
-            "fleiss_kappa": fleiss_kappa
+            "fleiss_kappa": fleiss_kappa,
+            "agreement_statistic_used": statistic_used
         }

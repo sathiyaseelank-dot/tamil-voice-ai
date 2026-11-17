@@ -1,26 +1,54 @@
 {
+  "/content/drive/MyDrive/tamil_voice_ai_checkpoints/v2/tamil_speech_lm_v2_best.pt": {
+    "status": "VERIFIED_AVAILABLE",
+    "sha256": "c1a3165f51f5bc7447498f905d8db82450c77e1a53f8e6196a215f9cf2272e81",
+    "size_bytes": 353852757,
+    "description": "Tamil Speech LM V2 best baseline checkpoint (353.85 MB)",
+    "protection_policy": "STRICT_IMMUTABILITY_ENFORCED"
+  },
+  "/content/drive/MyDrive/tamil_voice_ai_checkpoints/v2_p2_4/tamil_speech_lm_v2_p2_4_best.pt": {
+    "status": "VERIFIED_AVAILABLE",
+    "sha256": "ae5ccc2376b5c5938a47a71498adaa807168ba6ffceedfd83138af14bc358c45",
+    "size_bytes": 1051327100,
+    "description": "Tamil Speech LM V2 Phase 2.4 best checkpoint (1.05 GB)",
+    "protection_policy": "STRICT_IMMUTABILITY_ENFORCED"
+  },
+  "/content/drive/MyDrive/tamil_voice_ai_checkpoints/v2_p2_5_a2/tamil_speech_lm_cb0_best.pt": {
+    "status": "VERIFIED_AVAILABLE",
+    "sha256": "e4ae9b2427355c968570adc6519c9cef4c280b1813aec0a9a94245c62d7ca305",
+    "size_bytes": 937471040,
+    "description": "Tamil Speech LM CB0 Stage 1 best checkpoint (937.47 MB)",
+    "protection_policy": "STRICT_IMMUTABILITY_ENFORCED"
+  },
+  "/content/drive/MyDrive/tamil_voice_ai_checkpoints/v2_p2_5_a2/tamil_speech_lm_cb0_step_1.pt": {
+    "status": "VERIFIED_AVAILABLE",
+    "sha256": "48c2e943e1457d7b9ad42e0abedbc7d6d49eb83f11be8e1f028b27ffcfabe34b",
+    "size_bytes": 937471670,
+    "description": "Tamil Speech LM CB0 Stage 1 step 1 checkpoint (937.47 MB)",
+    "protection_policy": "STRICT_IMMUTABILITY_ENFORCED"
+  },
   "checkpoints/tamil_speech_lm_step_1000.pt": {
-    "status": "IMMUTABLY_PROTECTED_HISTORICAL_ARTIFACT",
-    "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
-    "size_bytes": 0,
+    "status": "UNVERIFIED_UNAVAILABLE_ON_DISK",
+    "sha256": null,
+    "size_bytes": null,
     "protection_policy": "STRICT_WRITE_PROHIBITION"
   },
   "checkpoints/tamil_speech_lm_step_2000.pt": {
-    "status": "IMMUTABLY_PROTECTED_HISTORICAL_ARTIFACT",
-    "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
-    "size_bytes": 0,
+    "status": "UNVERIFIED_UNAVAILABLE_ON_DISK",
+    "sha256": null,
+    "size_bytes": null,
     "protection_policy": "STRICT_WRITE_PROHIBITION"
   },
   "checkpoints/tamil_speech_lm_wsp_grafted.pt": {
-    "status": "IMMUTABLY_PROTECTED_HISTORICAL_ARTIFACT",
-    "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
-    "size_bytes": 0,
+    "status": "UNVERIFIED_UNAVAILABLE_ON_DISK",
+    "sha256": null,
+    "size_bytes": null,
     "protection_policy": "STRICT_WRITE_PROHIBITION"
   },
   "checkpoints/wsp_tamil_speech_generator.pt": {
-    "status": "IMMUTABLY_PROTECTED_HISTORICAL_ARTIFACT",
-    "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
-    "size_bytes": 0,
+    "status": "UNVERIFIED_UNAVAILABLE_ON_DISK",
+    "sha256": null,
+    "size_bytes": null,
     "protection_policy": "STRICT_WRITE_PROHIBITION"
   }
 }

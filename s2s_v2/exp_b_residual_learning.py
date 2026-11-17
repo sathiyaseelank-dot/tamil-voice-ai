@@ -44,6 +44,7 @@ class ExperimentBTrainer:
         self.init_type = init_type
         self.save_dir = save_dir
         self.parent_checkpoint_info = None
+        self.is_checkpoint_loaded = (init_type == "random")
         os.makedirs(save_dir, exist_ok=True)
 
         if freeze_backbone_and_cb0:
@@ -68,40 +69,69 @@ class ExperimentBTrainer:
         # Residual loss weights
         self.loss_weights = [0.0, 1.0, 0.5, 0.25]
 
-    def load_exp_a_checkpoint(self, checkpoint_path: str, verify_sha256: Optional[str] = None) -> Dict[str, Any]:
+    def load_exp_a_checkpoint(self, checkpoint_path: str, verify_sha256: str) -> Dict[str, Any]:
         """
         Loads approved Experiment A checkpoint into backbone and CB0 head.
-        Verifies SHA-256 and records provenance.
+        Requires mandatory SHA-256 validation and state_dict compatibility checks.
         """
         assert os.path.exists(checkpoint_path), f"Experiment A checkpoint not found: {checkpoint_path}"
+        assert verify_sha256 is not None and len(verify_sha256) == 64, (
+            f"Mandatory SHA-256 hash required (expected 64-char hex string, got '{verify_sha256}')"
+        )
 
-        if verify_sha256:
-            h = hashlib.sha256()
-            with open(checkpoint_path, "rb") as f:
-                while chunk := f.read(65536):
-                    h.update(chunk)
-            actual_hash = h.hexdigest()
-            assert actual_hash == verify_sha256, (
-                f"SHA-256 mismatch for Exp A checkpoint {checkpoint_path}!\n"
-                f"Expected: {verify_sha256}\nActual:   {actual_hash}"
-            )
+        h = hashlib.sha256()
+        with open(checkpoint_path, "rb") as f:
+            while chunk := f.read(65536):
+                h.update(chunk)
+        actual_hash = h.hexdigest()
+        assert actual_hash == verify_sha256, (
+            f"MANDATORY SHA-256 MISMATCH for Exp A checkpoint {checkpoint_path}!\n"
+            f"Expected: {verify_sha256}\nActual:   {actual_hash}"
+        )
 
         ckpt = torch.load(checkpoint_path, map_location=self.device, weights_only=False)
-        self.model.load_state_dict(ckpt["model_state_dict"], strict=False)
+        missing, unexpected = self.model.load_state_dict(ckpt["model_state_dict"], strict=False)
+
+        # Validate that no backbone or CB0 parameters are missing
+        backbone_keys = [k for k in self.model.state_dict().keys() if not any(x in k for x in ["head.heads.1", "head.heads.2", "head.heads.3", "head.depth_embeddings"])]
+        missing_backbone = [k for k in missing if k in backbone_keys]
+        if missing_backbone:
+            raise ValueError(f"Checkpoint compatibility failure: Missing required backbone keys: {missing_backbone}")
+        if len(unexpected) > 0:
+            raise ValueError(f"Checkpoint compatibility failure: Unexpected keys in checkpoint: {unexpected}")
 
         self.parent_checkpoint_info = {
             "path": checkpoint_path,
+            "sha256": actual_hash,
             "step": ckpt.get("step", 0),
             "experiment_id": ckpt.get("experiment_id", "exp_a")
         }
-        print(f"✓ Loaded approved Experiment A checkpoint from {checkpoint_path} (Provenance recorded)")
+        self.is_checkpoint_loaded = True
+        print(f"✓ Loaded approved Experiment A checkpoint from {checkpoint_path} (SHA-256 & Provenance verified)")
         return ckpt
 
     def train_step(self, h_mms: torch.Tensor, tgt_tokens: torch.Tensor) -> Dict[str, float]:
         """
         Trains residual heads using ground-truth preceding codebook teacher forcing.
+        Refuses training when init_type='checkpoint' until approved checkpoint is loaded.
         """
-        self.model.train()
+        if self.init_type == "checkpoint" and not self.is_checkpoint_loaded:
+            raise RuntimeError(
+                "MANDATORY INITIALIZATION FAILURE: Experiment B requires an approved Experiment A checkpoint before training. "
+                "Call load_exp_a_checkpoint(checkpoint_path, verify_sha256) first."
+            )
+
+        # Keep frozen backbone in eval mode (no dropout) and residual heads in train mode
+        self.model.aligner.eval()
+        if hasattr(self.model, "pos_enc") and isinstance(self.model.pos_enc, nn.Module):
+            self.model.pos_enc.eval()
+        self.model.transformer.eval()
+        self.model.ln_f.eval()
+        self.model.head.heads[0].eval()
+        for k in range(1, self.model.num_codebooks):
+            self.model.head.heads[k].train()
+            self.model.head.depth_embeddings[k - 1].train()
+
         self.optimizer.zero_grad()
 
         target_len = tgt_tokens.shape[-1]
@@ -215,7 +245,7 @@ def build_exp_b_system(
         n_layers=6,
         d_ff=4096,
         num_codebooks=4,
-        vocab_size=1029,
+        vocab_size=1024,
         pos_enc_type=pos_enc_type
     )
     aligner = EncodecTargetAligner(device=dev)

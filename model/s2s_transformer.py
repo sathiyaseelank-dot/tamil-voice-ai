@@ -106,7 +106,7 @@ class DepthAudioHead(nn.Module):
     Predicts CB0 unconditionally from the latent representations.
     Predicts CB_k conditioned on embeddings of preceding codebooks (depth recurrence).
     """
-    def __init__(self, d_model: int = 1024, num_codebooks: int = 4, vocab_size: int = 1029):
+    def __init__(self, d_model: int = 1024, num_codebooks: int = 4, vocab_size: int = 1024):
         super().__init__()
         self.num_codebooks = num_codebooks
         self.vocab_size = vocab_size
@@ -162,7 +162,7 @@ class S2STokenPredictor(nn.Module):
         n_layers: int = 6,
         d_ff: int = 4096,
         num_codebooks: int = 4,
-        vocab_size: int = 1029,
+        vocab_size: int = 1024,
         dropout: float = 0.1,
         pos_enc_type: str = "sinusoidal"  # "sinusoidal", "learned", "conv", "none"
     ):
